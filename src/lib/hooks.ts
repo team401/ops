@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, ManufacturingComment, ManufacturingExport, InventoryItem } from "@/types";
+import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
 // one student drags a card, or a coach edits a cert, every open board
@@ -106,83 +106,6 @@ export function useTimeclockPins(enabled: boolean) {
   }, [enabled]);
 
   return { pins: enabled ? pins : [] };
-}
-
-export function useManufacturingExports() {
-  const [exports, setExports] = useState<ManufacturingExport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const source = query(collection(db, "exports"), orderBy("createdAt", "asc"));
-    return onSnapshot(
-      source,
-      (snapshot) => {
-        setExports(
-          snapshot.docs.map((record) => {
-            const data = record.data();
-            return {
-              ...data,
-              id: record.id,
-              selections: data.selections ?? [],
-              manufacturingStatus:
-                data.manufacturingStatus === "complete" || data.manufacturingStatus === "cancelled"
-                  ? data.manufacturingStatus
-                  : "pending",
-              manufacturingCompletedAt: data.manufacturingCompletedAt?.toDate?.() ?? null,
-              manufacturingCancelledAt: data.manufacturingCancelledAt?.toDate?.() ?? null,
-              createdAt: data.createdAt?.toDate?.() ?? null,
-            } as ManufacturingExport;
-          }),
-        );
-        setError(null);
-        setLoading(false);
-      },
-      (snapshotError) => {
-        console.error(snapshotError);
-        setError("Parts could not be loaded. Check that the manufacturing Firestore rules are deployed.");
-        setLoading(false);
-      },
-    );
-  }, []);
-
-  return { exports, loading, error };
-}
-
-export function useManufacturingComments(exportId: string) {
-  const [comments, setComments] = useState<ManufacturingComment[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const source = query(collection(db, "exports", exportId, "comments"), orderBy("createdAt", "asc"));
-    return onSnapshot(
-      source,
-      (snapshot) => {
-        setComments(
-          snapshot.docs.map((record) => {
-            const data = record.data();
-            return {
-              id: record.id,
-              body: data.body,
-              authorUid: data.authorUid,
-              authorName: data.authorName,
-              createdAt: data.createdAt?.toDate?.() ?? null,
-            } as ManufacturingComment;
-          }),
-        );
-        setError(null);
-        setLoading(false);
-      },
-      (snapshotError) => {
-        console.error(snapshotError);
-        setError("Comments could not be loaded.");
-        setLoading(false);
-      },
-    );
-  }, [exportId]);
-
-  return { comments, loading, error };
 }
 
 export function useInventory() {

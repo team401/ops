@@ -1,6 +1,6 @@
 # 401 Ops
 
-Team 401's operations hub for managing projects, assignments, certifications, attendance, manufacturing, inventory, and reporting. It is built as a static Next.js application and uses Firebase Authentication, Cloud Firestore, and Firebase Storage for its backend.
+Team 401's operations hub for managing projects, assignments, certifications, attendance, inventory, and reporting. It is built as a static Next.js application and uses Firebase Authentication, Cloud Firestore, and Firebase Storage for its backend.
 
 ## What the app does
 
@@ -18,7 +18,6 @@ Team 401's operations hub for managing projects, assignments, certifications, at
 - Full-screen kiosk mode using automatically assigned 1–3 digit PINs
 - Coach tools for signing out one person or everyone who forgot to clock out
 - Coach roster administration, individual account creation, CSV batch imports, and prepared credential emails
-- Live manufacturing queue for Onshape DXF, STEP, and lathe requests, including file downloads and completion tracking
 
 ## Roles and permissions
 
@@ -41,26 +40,23 @@ profile, width, and chain options automatically become searchable filter
 choices without a schema change. Any signed-in team member can add hardware,
 edit records, and adjust stock; only coaches can permanently delete records.
 
-## Manufacturing integration
+## Parts dashboard integration
 
-The authenticated `/parts` page reads the `exports` collection produced by
-[`PChild/onshape-parts-export`](https://github.com/PChild/onshape-parts-export).
-It displays the complete manufacturing packet, links back to the source Onshape
-element, downloads DXF and STEP files from Cloud Storage, and records shop
-completion separately from the exporter's file-generation `status`.
+Parts exports and manufacturing tracking now live in the separate
+[Team 401 Parts dashboard](https://team401.org/export/). The **Parts** link in
+the header opens that dashboard in a new tab.
 
-The exporter and this app use one Firebase project and Storage bucket. The
-`firestore.rules` and `storage.rules` files in both repositories must therefore
-stay identical: the merged rules protect exporter OAuth/session records while
-allowing the dashboard's authenticated manufacturing workflow. Deploy both rule
-files before using the page:
+The two sites use separate Firebase projects. Ops uses `team-401`; the Parts
+dashboard remains on `robotics-kanban`. This repository's `firestore.rules` and
+`storage.rules` protect only Ops data and task attachments and must be deployed
+only to `team-401`:
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only auth,firestore:rules,storage
 ```
 
-Copy these merged rule files to the exporter repository too. Deploying an older
-copy from either repository will replace the project-wide rules for both apps.
+Do not deploy these rules to `robotics-kanban`, because that project retains the
+manufacturing dashboard's exporter, OAuth, and file-access rules.
 
 ## Technology
 
@@ -101,14 +97,14 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 
 These values identify the Firebase web app and are safe to include in a client build. Firebase security rules, not secrecy of these values, protect application data.
 
-### 3. Deploy the security rules
+### 3. Deploy the Firebase configuration
 
-Install and authenticate the Firebase CLI if needed, then select the correct Firebase project and deploy both rule files:
+Install and authenticate the Firebase CLI if needed, then select the correct Firebase project and deploy Email/Password Authentication plus both rule files:
 
 ```bash
 npx firebase-tools login
 npx firebase-tools use --add
-npx firebase-tools deploy --only firestore:rules,storage
+npx firebase-tools deploy --only auth,firestore:rules,storage
 ```
 
 Task attachments are limited to 20 MB per file by the Storage rules.
@@ -193,5 +189,5 @@ custom domain. Update this value if the repository is renamed again.
 
 - Removing someone from the Admin roster deletes their Firestore profile but not their Firebase Authentication record. Delete the Authentication user from the Firebase console when access must be fully revoked.
 - Changes to `firestore.rules` or `storage.rules` are not applied by the GitHub Pages deployment. Deploy Firebase rules separately.
-- Firebase Storage may require the Firebase project to use the Blaze plan, even when usage remains within no-cost quotas.
+- Provisioning and using Firebase Storage requires the Firebase project to use the Blaze plan, even when usage remains within no-cost quotas.
 - Unknown routes redirect to the app home page, which then sends authenticated users to the board and signed-out users to login.
