@@ -1,6 +1,6 @@
 # 401 Ops
 
-Team 401's operations hub for managing projects, assignments, certifications, attendance, manufacturing, inventory, and reporting. It is built as a static Next.js application and uses Firebase Authentication, Cloud Firestore, and Firebase Storage for its backend.
+Team 401's operations hub for managing projects, assignments, certifications, attendance, inventory, and reporting. It is built as a static Next.js application and uses Firebase Authentication, Cloud Firestore, and Firebase Storage for its backend.
 
 ## What the app does
 
@@ -18,7 +18,6 @@ Team 401's operations hub for managing projects, assignments, certifications, at
 - Full-screen kiosk mode using automatically assigned 1–3 digit PINs
 - Coach tools for signing out one person or everyone who forgot to clock out
 - Coach roster administration, individual account creation, CSV batch imports, and prepared credential emails
-- Live manufacturing queue for Onshape DXF, STEP, and lathe requests, including file downloads and completion tracking
 
 ## Roles and permissions
 
@@ -41,26 +40,24 @@ profile, width, and chain options automatically become searchable filter
 choices without a schema change. Any signed-in team member can add hardware,
 edit records, and adjust stock; only coaches can permanently delete records.
 
-## Manufacturing integration
+## Parts dashboard integration
 
-The authenticated `/parts` page reads the `exports` collection produced by
-[`PChild/onshape-parts-export`](https://github.com/PChild/onshape-parts-export).
-It displays the complete manufacturing packet, links back to the source Onshape
-element, downloads DXF and STEP files from Cloud Storage, and records shop
-completion separately from the exporter's file-generation `status`.
+Parts exports and manufacturing tracking now live in the separate
+[Team 401 Parts dashboard](https://team401.org/export/). The **Parts** link in
+the header opens that dashboard in a new tab.
 
-The exporter and this app use one Firebase project and Storage bucket. The
-`firestore.rules` and `storage.rules` files in both repositories must therefore
-stay identical: the merged rules protect exporter OAuth/session records while
-allowing the dashboard's authenticated manufacturing workflow. Deploy both rule
-files before using the page:
+The separate dashboard and this app use one Firebase project and Storage
+bucket. The `firestore.rules` and `storage.rules` files in both repositories
+must therefore stay compatible: the merged rules protect exporter OAuth/session
+records and its authenticated manufacturing workflow. Deploy both rule files
+after changing either one:
 
 ```bash
 firebase deploy --only firestore:rules,storage
 ```
 
-Copy these merged rule files to the exporter repository too. Deploying an older
-copy from either repository will replace the project-wide rules for both apps.
+Deploying an older copy from either repository will replace the project-wide
+rules for both apps.
 
 ## Technology
 

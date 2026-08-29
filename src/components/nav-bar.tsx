@@ -6,6 +6,12 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 
+type NavLink = {
+  href: string;
+  label: string;
+  external?: boolean;
+};
+
 export function NavBar() {
   const { profile, isCoach, isStudentLeader, signOut } = useAuth();
   const pathname = usePathname();
@@ -15,7 +21,7 @@ export function NavBar() {
 
   const canSeeMetrics = isCoach || isStudentLeader;
 
-  const links = [
+  const links: NavLink[] = [
     { href: "/board", label: "Kanban" },
     ...(profile.subteam
       ? [{ href: `/board/${profile.subteam}`, label: "My subteam" }]
@@ -23,7 +29,7 @@ export function NavBar() {
     { href: "/calendar", label: "Calendar" },
     ...(isCoach ? [{ href: "/timeclock", label: "Timeclock" }] : []),
     { href: "/my-tasks", label: "My tasks" },
-    { href: "/parts", label: "Parts" },
+    { href: "https://team401.org/export/", label: "Parts", external: true },
     { href: "/inventory", label: "Inventory" },
     { href: "/certifications", label: "Certifications" },
     ...(canSeeMetrics ? [{ href: "/metrics", label: "Metrics" }] : []),
@@ -54,17 +60,29 @@ export function NavBar() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={`tracked-label text-xs px-3 py-2 rounded whitespace-nowrap ${
-                isActive(l.href) ? "bg-blueprint text-white" : "text-steel hover:text-ink"
-              }`}
-            >
-              {l.label}
-            </Link>
-          ))}
+          {links.map((link) => {
+            const className = `tracked-label text-xs px-3 py-2 rounded whitespace-nowrap ${
+              !link.external && isActive(link.href)
+                ? "bg-blueprint text-white"
+                : "text-steel hover:text-ink"
+            }`;
+
+            return link.external ? (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={className}
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link key={link.href} href={link.href} className={className}>
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-3 whitespace-nowrap ml-auto md:ml-0">
@@ -85,18 +103,33 @@ export function NavBar() {
           <p className="text-xs text-steel px-2 py-1 sm:hidden">
             {profile.displayName} · {profile.role.replace("_", " ")}
           </p>
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              onClick={() => setMobileOpen(false)}
-              className={`block tracked-label text-xs px-3 py-2.5 rounded ${
-                isActive(l.href) ? "bg-blueprint text-white" : "text-steel"
-              }`}
-            >
-              {l.label}
-            </Link>
-          ))}
+          {links.map((link) => {
+            const className = `block tracked-label text-xs px-3 py-2.5 rounded ${
+              !link.external && isActive(link.href) ? "bg-blueprint text-white" : "text-steel"
+            }`;
+
+            return link.external ? (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMobileOpen(false)}
+                className={className}
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                className={className}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
       )}
     </header>
