@@ -46,18 +46,17 @@ Parts exports and manufacturing tracking now live in the separate
 [Team 401 Parts dashboard](https://team401.org/export/). The **Parts** link in
 the header opens that dashboard in a new tab.
 
-The separate dashboard and this app use one Firebase project and Storage
-bucket. The `firestore.rules` and `storage.rules` files in both repositories
-must therefore stay compatible: the merged rules protect exporter OAuth/session
-records and its authenticated manufacturing workflow. Deploy both rule files
-after changing either one:
+The two sites use separate Firebase projects. Ops uses `team-401`; the Parts
+dashboard remains on `robotics-kanban`. This repository's `firestore.rules` and
+`storage.rules` protect only Ops data and task attachments and must be deployed
+only to `team-401`:
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only auth,firestore:rules,storage
 ```
 
-Deploying an older copy from either repository will replace the project-wide
-rules for both apps.
+Do not deploy these rules to `robotics-kanban`, because that project retains the
+manufacturing dashboard's exporter, OAuth, and file-access rules.
 
 ## Technology
 
@@ -98,14 +97,14 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 
 These values identify the Firebase web app and are safe to include in a client build. Firebase security rules, not secrecy of these values, protect application data.
 
-### 3. Deploy the security rules
+### 3. Deploy the Firebase configuration
 
-Install and authenticate the Firebase CLI if needed, then select the correct Firebase project and deploy both rule files:
+Install and authenticate the Firebase CLI if needed, then select the correct Firebase project and deploy Email/Password Authentication plus both rule files:
 
 ```bash
 npx firebase-tools login
 npx firebase-tools use --add
-npx firebase-tools deploy --only firestore:rules,storage
+npx firebase-tools deploy --only auth,firestore:rules,storage
 ```
 
 Task attachments are limited to 20 MB per file by the Storage rules.
@@ -190,5 +189,5 @@ custom domain. Update this value if the repository is renamed again.
 
 - Removing someone from the Admin roster deletes their Firestore profile but not their Firebase Authentication record. Delete the Authentication user from the Firebase console when access must be fully revoked.
 - Changes to `firestore.rules` or `storage.rules` are not applied by the GitHub Pages deployment. Deploy Firebase rules separately.
-- Firebase Storage may require the Firebase project to use the Blaze plan, even when usage remains within no-cost quotas.
+- Provisioning and using Firebase Storage requires the Firebase project to use the Blaze plan, even when usage remains within no-cost quotas.
 - Unknown routes redirect to the app home page, which then sends authenticated users to the board and signed-out users to login.
