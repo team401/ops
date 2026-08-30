@@ -168,7 +168,7 @@ export default function CalendarPage() {
           </button>
         </div>
 
-        <div className="hidden sm:grid grid-cols-7 border-b border-steel-line bg-paper">
+        <div className="hidden lg:grid grid-cols-7 border-b border-steel-line bg-paper">
           {eachDayOfInterval({ start: startOfWeek(new Date()), end: endOfWeek(new Date()) }).map((day) => (
             <div key={day.getDay()} className="tracked-label text-[10px] text-steel text-center px-2 py-2">
               {format(day, "EEE")}
@@ -176,7 +176,7 @@ export default function CalendarPage() {
           ))}
         </div>
 
-        <div className="hidden sm:grid grid-cols-7">
+        <div className="hidden lg:grid grid-cols-7">
           {calendarDays.map((day) => {
             const key = format(day, "yyyy-MM-dd");
             const dayTasks = tasksByDate.get(key) ?? [];
@@ -220,7 +220,7 @@ export default function CalendarPage() {
           })}
         </div>
 
-        <div className="sm:hidden p-3 space-y-4">
+        <div className="space-y-4 p-3 lg:hidden sm:p-4">
           {monthDateKeys.length === 0 ? (
             <p className="text-sm text-steel text-center py-8">Nothing is scheduled this month.</p>
           ) : (

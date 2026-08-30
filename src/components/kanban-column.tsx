@@ -28,7 +28,7 @@ export function KanbanColumn({
   const meta = STATUS_META[status];
 
   return (
-    <div className="flex flex-col w-full sm:min-w-[260px] sm:flex-1 sm:w-auto sm:shrink-0 sm:h-[calc(100vh-14rem)] sm:min-h-[360px]">
+    <div className="flex w-full flex-col xl:h-[calc(100dvh-14rem)] xl:min-h-[360px] xl:min-w-[240px] xl:flex-1 xl:shrink-0">
       <div className="flex items-baseline gap-2 px-1 py-2 mb-2 sticky top-0 z-20 bg-paper/95 backdrop-blur-sm">
         <span className="tracked-label text-[10px] text-steel">{meta.step}</span>
         <h3 className="tracked-label text-xs font-bold">{meta.label}</h3>
@@ -36,7 +36,7 @@ export function KanbanColumn({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex-1 rounded p-2 space-y-2 min-h-[120px] border border-dashed transition-colors sm:overflow-y-auto sm:overscroll-contain ${isOver ? "border-blueprint bg-blueprint/5" : "border-steel-line/60"
+        className={`min-h-[120px] flex-1 space-y-2 rounded border border-dashed p-2 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver ? "border-blueprint bg-blueprint/5" : "border-steel-line/60"
           }`}
       >
         {tasks.map((task) => (

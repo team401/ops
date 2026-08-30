@@ -8,8 +8,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <RequireAuth>
       <NavBar />
-      <main className="flex-1 grid-paper">
-        <div className="w-full px-6 py-6">{children}</div>
+      <main className="min-w-0 flex-1 grid-paper">
+        <div className="w-full px-3 py-4 sm:px-4 lg:px-5 lg:py-5 xl:px-6 xl:py-6">{children}</div>
       </main>
     </RequireAuth>
   );

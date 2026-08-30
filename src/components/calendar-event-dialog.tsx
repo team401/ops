@@ -107,7 +107,7 @@ export function CalendarEventDialog({
   return (
     <ModalBackdrop onClose={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded border border-steel-line bg-paper-raised shadow-xl"
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-xl overflow-y-auto rounded border border-steel-line bg-paper-raised shadow-xl sm:max-h-[calc(100dvh-2rem)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-event-dialog-title"

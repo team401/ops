@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -16,6 +16,15 @@ export function NavBar() {
   const { profile, isCoach, signOut } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileOpen(false);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [mobileOpen]);
 
   if (!profile) return null;
 
@@ -46,12 +55,15 @@ export function NavBar() {
   }
 
   return (
-    <header className="border-b border-steel-line bg-paper-raised">
-      <div className="w-full px-4 sm:px-6 flex items-center h-14 gap-3">
+    <header className="relative z-50 border-b border-steel-line bg-paper-raised">
+      <div className="flex h-14 w-full items-center gap-3 px-3 sm:px-4 xl:px-6">
         <button
+          type="button"
           onClick={() => setMobileOpen((v) => !v)}
-          className="md:hidden text-steel p-1 -ml-1"
+          className="-ml-1 flex min-h-10 min-w-10 items-center justify-center rounded text-steel hover:bg-paper xl:hidden"
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
+          aria-controls="primary-navigation"
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -63,9 +75,9 @@ export function NavBar() {
           401 Ops
         </Link>
 
-        <nav className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto">
+        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto xl:flex">
           {links.map((link) => {
-            const className = `tracked-label text-xs px-3 py-2 rounded whitespace-nowrap ${
+            const className = `tracked-label whitespace-nowrap rounded px-2.5 py-2 text-[11px] 2xl:px-3 2xl:text-xs ${
               !link.external && isActive(link.href)
                 ? "bg-blueprint text-white"
                 : "text-steel hover:text-ink"
@@ -94,8 +106,8 @@ export function NavBar() {
           })}
         </nav>
 
-        <div className="flex items-center gap-3 whitespace-nowrap ml-auto md:ml-0">
-          <span className="text-sm text-steel hidden sm:inline">
+        <div className="ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
+          <span className="hidden max-w-56 truncate text-sm text-steel sm:inline xl:hidden 2xl:inline">
             {profile.displayName}
             <span className="tracked-label text-[10px] ml-2 text-blueprint">
               {profile.role.replace("_", " ")}
@@ -108,10 +120,14 @@ export function NavBar() {
       </div>
 
       {mobileOpen && (
-        <nav className="md:hidden border-t border-steel-line bg-paper-raised px-2 py-2">
-          <p className="text-xs text-steel px-2 py-1 sm:hidden">
+        <nav
+          id="primary-navigation"
+          className="absolute left-0 right-0 top-full max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-steel-line bg-paper-raised p-2 shadow-lg xl:hidden"
+        >
+          <p className="px-3 py-2 text-xs text-steel sm:hidden">
             {profile.displayName} · {profile.role.replace("_", " ")}
           </p>
+          <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((link) => {
             const className = `block tracked-label text-xs px-3 py-2.5 rounded ${
               !link.external && isActive(link.href) ? "bg-blueprint text-white" : "text-steel"
@@ -140,6 +156,7 @@ export function NavBar() {
               </Link>
             );
           })}
+          </div>
         </nav>
       )}
     </header>

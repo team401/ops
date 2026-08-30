@@ -86,7 +86,7 @@ export function GanttView({ tasks, onOpenTask }: { tasks: Task[]; onOpenTask: (t
 
       {timeline ? (
         <>
-          <div className="hidden md:block overflow-auto rounded border border-steel-line bg-paper-raised max-h-[calc(100vh-14rem)]">
+          <div className="hidden max-h-[calc(100dvh-12rem)] overflow-auto rounded border border-steel-line bg-paper-raised lg:block">
             <div style={{ width: TASK_COLUMN_WIDTH + timeline.width }}>
               <div className="sticky top-0 z-30 flex h-14 border-b border-steel-line bg-paper-raised">
                 <div
@@ -130,7 +130,7 @@ export function GanttView({ tasks, onOpenTask }: { tasks: Task[]; onOpenTask: (t
             </div>
           </div>
 
-          <div className="md:hidden space-y-2">
+          <div className="space-y-2 lg:hidden">
             {scheduledTasks.map((item) => (
               <MobileTask key={item.task.id} item={item} onOpen={() => onOpenTask(item.task)} />
             ))}

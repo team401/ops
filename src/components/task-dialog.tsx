@@ -314,7 +314,7 @@ export function TaskDialog({
     <ModalBackdrop onClose={onClose}>
       <form
         onSubmit={handleSubmit}
-        className="bg-paper-raised border border-steel-line rounded w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4"
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded border border-steel-line bg-paper-raised p-4 sm:max-h-[calc(100dvh-2rem)] sm:p-6"
       >
         <div className="flex items-center justify-between">
           <h2 className="tracked-label text-xs text-blueprint font-bold">

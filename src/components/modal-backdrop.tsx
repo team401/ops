@@ -24,7 +24,7 @@ export function ModalBackdrop({
 
   return (
     <div
-      className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-ink/40 p-2 [&>*]:max-h-[calc(100dvh-1rem)] [&>*]:overflow-y-auto sm:p-4 sm:[&>*]:max-h-[calc(100dvh-2rem)]"
       onMouseDown={handleBackdropMouseDown}
       role="presentation"
     >

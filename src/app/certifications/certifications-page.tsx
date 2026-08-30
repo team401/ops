@@ -107,7 +107,7 @@ function ManageGrid() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <div className="hidden sm:block bg-paper-raised border border-steel-line rounded overflow-auto max-h-[70vh]">
+      <div className="hidden max-h-[70dvh] overflow-auto rounded border border-steel-line bg-paper-raised lg:block">
         <table className="text-sm min-w-full">
           <thead className="bg-paper border-b border-steel-line sticky top-0 z-10">
             <tr>
@@ -161,7 +161,7 @@ function ManageGrid() {
         </table>
       </div>
 
-      <div className="sm:hidden space-y-2">
+      <div className="space-y-2 lg:hidden">
         {members.map((member) => {
           const expanded = expandedUid === member.uid;
           return (
