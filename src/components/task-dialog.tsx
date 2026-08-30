@@ -49,6 +49,7 @@ export function TaskDialog({
   const { profile, isCoach, canManageSubteam } = useAuth();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
+  const [leadersOnly, setLeadersOnly] = useState(task?.leadersOnly ?? false);
   const [subteam, setSubteam] = useState<Subteam>(task?.subteam ?? defaultSubteam);
   const [priority, setPriority] = useState<Priority>(task?.priority ?? "medium");
   const [dueDate, setDueDate] = useState(task?.dueDate?.slice(0, 10) ?? "");
@@ -80,15 +81,17 @@ export function TaskDialog({
   const hasStatusControl = mode === "edit" && (canManageThisTask || isOnThisTask);
   const canAttach = !readOnly || isOnThisTask;
 
-  // Assignment is deliberately cross-subteam. Certifications remain the
-  // skill/safety gate for claiming work; roster subteam does not.
-  const assignableUsers = users;
+  // Assignment is deliberately cross-subteam. A leaders-only task cannot be
+  // assigned to someone who is not allowed to see it.
+  const visibleUsers = leadersOnly ? users.filter((user) => user.role !== "student") : users;
+  const assignableUsers = visibleUsers;
 
   const creator = task ? users.find((u) => u.uid === task.createdByUid) : undefined;
   const incomplete = task ? incompletePrerequisites({ ...task, prerequisiteTaskIds }, tasks) : [];
 
   const prerequisiteOptions = tasks.filter((candidate) => {
     if (candidate.id === task?.id) return false;
+    if (!leadersOnly && candidate.leadersOnly) return false;
     if (!task) return true;
     const visited = new Set<string>();
     const dependsOnCurrentTask = (candidateId: string): boolean => {
@@ -107,6 +110,24 @@ export function TaskDialog({
     );
   }
 
+  function handleLeadersOnlyChange(checked: boolean) {
+    setLeadersOnly(checked);
+    if (checked) {
+      const leaderUids = new Set(
+        users.filter((user) => user.role !== "student").map((user) => user.uid)
+      );
+      setAssigneeUids((current) => current.filter((uid) => leaderUids.has(uid)));
+      if (pointOfContactUid && !leaderUids.has(pointOfContactUid)) {
+        setPointOfContactUid(profile?.uid ?? "");
+      }
+    } else {
+      const privateTaskIds = new Set(
+        tasks.filter((candidate) => candidate.leadersOnly).map((candidate) => candidate.id)
+      );
+      setPrerequisiteTaskIds((current) => current.filter((id) => !privateTaskIds.has(id)));
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!profile) return;
@@ -117,6 +138,7 @@ export function TaskDialog({
         const created = await createTask({
           title,
           description,
+          leadersOnly,
           subteam,
           priority,
           requiredCertificationIds,
@@ -143,6 +165,7 @@ export function TaskDialog({
         await updateTask(task.id, {
           title,
           description,
+          leadersOnly,
           subteam,
           priority,
           requiredCertificationIds,
@@ -431,6 +454,24 @@ export function TaskDialog({
           />
         </label>
 
+        {(!readOnly || leadersOnly) && (
+          <label className="flex items-start gap-3 rounded border border-steel-line bg-surface p-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              checked={leadersOnly}
+              onChange={(e) => handleLeadersOnlyChange(e.target.checked)}
+              disabled={readOnly}
+            />
+            <span>
+              <span className="block text-sm font-semibold">Leaders only</span>
+              <span className="mt-0.5 block text-xs text-steel">
+                Only coaches and student leaders can see this task. Ordinary students will not see it on boards, calendars, reports, or task lists.
+              </span>
+            </span>
+          </label>
+        )}
+
         {!readOnly && (
           <div>
             <span className="tracked-label text-xs text-steel">Assignees</span>
@@ -469,7 +510,7 @@ export function TaskDialog({
             disabled={readOnly}
           >
             <option value="">Task creator ({creator?.displayName ?? profile?.displayName ?? "current user"})</option>
-            {users.map((user) => (
+            {visibleUsers.map((user) => (
               <option key={user.uid} value={user.uid}>{user.displayName}</option>
             ))}
           </select>

@@ -54,8 +54,15 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
       <button onClick={onOpen} {...(draggable ? { ...listeners, ...attributes } : {})}
         className={`w-full p-3.5 text-left ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}>
         <div className="flex items-start justify-between gap-2">
-          <span className="tracked-label text-xs font-bold"
-            style={{ color: `color-mix(in srgb, ${meta.color} 65%, var(--ink))` }}>{meta.label}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="tracked-label text-xs font-bold"
+              style={{ color: `color-mix(in srgb, ${meta.color} 65%, var(--ink))` }}>{meta.label}</span>
+            {task.leadersOnly && (
+              <span className="tracked-label rounded-sm border border-blueprint/25 bg-blueprint/10 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">
+                Leaders only
+              </span>
+            )}
+          </div>
           <span className="tracked-label rounded border border-ink/10 bg-surface/80 px-2 py-0.5 text-[11px] font-bold"
             style={{ color: `color-mix(in srgb, ${PRIORITY_MARK[task.priority].color} 65%, var(--ink))` }}
             title={`${task.priority} priority`}>

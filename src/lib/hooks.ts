@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/context/auth-context";
 import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem, CalendarEvent } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
@@ -10,34 +11,47 @@ import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, Invento
 // updates live without a manual refresh.
 
 export function useTasks() {
+  const { profile } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedRole, setLoadedRole] = useState<UserProfile["role"] | undefined>();
+  const role = profile?.role;
 
   useEffect(() => {
-    const q = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
+    if (!role) return;
+    const source = role === "student"
+      ? query(collection(db, "tasks"), where("leadersOnly", "==", false))
+      : collection(db, "tasks");
+    const unsub = onSnapshot(source, (snap) => {
       setTasks(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            ...data,
-            assigneeUids: data.assigneeUids ?? [],
-            history: data.history ?? [],
-            pointOfContactUid: data.pointOfContactUid ?? data.createdByUid,
-            blockedReason: data.blockedReason ?? null,
-            blockedDetails: data.blockedDetails ?? "",
-            prerequisiteTaskIds: data.prerequisiteTaskIds ?? [],
-            comments: data.comments ?? [],
-            attachments: data.attachments ?? [],
-          } as Task;
-        })
+        snap.docs
+          .map((d) => {
+            const data = d.data();
+            return {
+              ...data,
+              leadersOnly: data.leadersOnly ?? false,
+              assigneeUids: data.assigneeUids ?? [],
+              history: data.history ?? [],
+              pointOfContactUid: data.pointOfContactUid ?? data.createdByUid,
+              blockedReason: data.blockedReason ?? null,
+              blockedDetails: data.blockedDetails ?? "",
+              prerequisiteTaskIds: data.prerequisiteTaskIds ?? [],
+              comments: data.comments ?? [],
+              attachments: data.attachments ?? [],
+            } as Task;
+          })
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       );
+      setLoadedRole(role);
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, [role]);
 
-  return { tasks, loading };
+  return {
+    tasks: loadedRole === role ? tasks : [],
+    loading: loading || loadedRole !== role,
+  };
 }
 
 export function useUsers() {

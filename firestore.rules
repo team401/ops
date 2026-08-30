@@ -84,9 +84,12 @@ service cloud.firestore {
 
     // --- tasks ---
     match /tasks/{taskId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && (resource.data.leadersOnly == false || isCoach() || isStudentLeader());
 
-      allow create: if isSignedIn() && canManageSubteam(request.resource.data.subteam);
+      allow create: if isSignedIn()
+        && canManageSubteam(request.resource.data.subteam)
+        && request.resource.data.leadersOnly is bool;
 
       allow delete: if isSignedIn() && canManageSubteam(resource.data.subteam);
 
@@ -94,10 +97,12 @@ service cloud.firestore {
       // including directly setting the assignee list. A plain student may join
       // an open-to-them task they're certified for, leave a task they're on,
       // move any task between status columns, or append an update.
-      allow update: if canManageSubteam(resource.data.subteam)
-        || (
-          isSignedIn() &&
-          (
+      allow update: if isSignedIn()
+        && (resource.data.leadersOnly == false || isCoach() || isStudentLeader())
+        && request.resource.data.leadersOnly is bool
+        && (
+          canManageSubteam(resource.data.subteam)
+          || (
             // Join: add yourself to assigneeUids, nothing else changes, and
             // you hold a matching certification (if the task requires one).
             (

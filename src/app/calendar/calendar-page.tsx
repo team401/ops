@@ -314,7 +314,9 @@ function CalendarTask({ task, onClick, compact = false }: { task: Task; onClick:
     >
       <span className={`${compact ? "text-[10px] line-clamp-2" : "text-sm"} block font-medium leading-snug`}>{task.title}</span>
       <span className={`flex items-center justify-between gap-1 text-white/80 ${compact ? "mt-1 text-[8px]" : "mt-1.5 text-[9px]"}`}>
-        <span className="tracked-label truncate">{STATUS_LABEL[task.status]}</span>
+        <span className="tracked-label truncate">
+          {task.leadersOnly ? "Leaders · " : ""}{STATUS_LABEL[task.status]}
+        </span>
         <span className={`tracked-label shrink-0 rounded-sm px-1 py-0.5 ${
           task.priority === "high"
             ? "bg-danger text-white"

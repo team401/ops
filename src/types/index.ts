@@ -81,6 +81,7 @@ export interface Task {
   id: string;
   title: string;
   description: string;
+  leadersOnly: boolean;
   subteam: Subteam;
   status: TaskStatus;
   priority: Priority;

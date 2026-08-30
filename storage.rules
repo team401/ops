@@ -19,9 +19,16 @@ service firebase.storage {
         || (profile().role == 'student_leader' && profile().subteam == task(taskId).subteam);
     }
 
+    function canView(taskId) {
+      return task(taskId).leadersOnly == false
+        || profile().role == 'coach'
+        || profile().role == 'student_leader';
+    }
+
     match /task-attachments/{taskId}/{attachmentId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && canView(taskId);
       allow write: if isSignedIn()
+        && canView(taskId)
         && (canManage(taskId) || task(taskId).assigneeUids.hasAny([request.auth.uid]))
         && (request.resource == null || request.resource.size <= 20 * 1024 * 1024);
     }
