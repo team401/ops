@@ -107,10 +107,10 @@ export default function MetricsPage() {
     return (totalDays / done.length).toFixed(1);
   }, [tasks]);
 
-  if (profile && profile.role === "student") {
+  if (profile && profile.role !== "coach") {
     return (
       <AppShell>
-        <p className="text-sm text-steel">Metrics are visible to coaches and student leaders.</p>
+        <p className="text-sm text-steel">Only coaches can access metrics.</p>
       </AppShell>
     );
   }

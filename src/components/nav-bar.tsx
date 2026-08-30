@@ -13,13 +13,11 @@ type NavLink = {
 };
 
 export function NavBar() {
-  const { profile, isCoach, isStudentLeader, signOut } = useAuth();
+  const { profile, isCoach, signOut } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   if (!profile) return null;
-
-  const canSeeMetrics = isCoach || isStudentLeader;
 
   const links: NavLink[] = [
     { href: "/board", label: "Kanban" },
@@ -32,7 +30,7 @@ export function NavBar() {
     { href: "https://team401.org/export/", label: "Parts", external: true },
     { href: "/inventory", label: "Inventory" },
     { href: "/certifications", label: "Certifications" },
-    ...(canSeeMetrics ? [{ href: "/metrics", label: "Metrics" }] : []),
+    ...(isCoach ? [{ href: "/metrics", label: "Metrics" }] : []),
     { href: "/reports", label: "Reports" },
     ...(isCoach ? [{ href: "/admin", label: "Admin" }] : []),
   ];
