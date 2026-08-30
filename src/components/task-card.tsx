@@ -45,20 +45,26 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
 
   return (
     <div ref={setNodeRef}
-      style={{ ...style, backgroundColor: `color-mix(in srgb, ${meta.color} 82%, var(--paper-raised))` }}
-      className="relative border border-ink/20 rounded-sm shadow-sm hover:shadow-md transition-shadow text-white">
+      style={{
+        ...style,
+        backgroundColor: `color-mix(in srgb, ${meta.color} 12%, var(--surface))`,
+        borderLeftColor: meta.color,
+      }}
+      className="relative rounded-sm border border-l-4 border-ink/15 text-ink shadow-sm transition-shadow hover:shadow-md">
       <button onClick={onOpen} {...(draggable ? { ...listeners, ...attributes } : {})}
-        className={`w-full text-left p-3 ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}>
+        className={`w-full p-3.5 text-left ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}>
         <div className="flex items-start justify-between gap-2">
-          <span className="tracked-label text-[10px] text-white/80">{meta.label}</span>
-          <span className="tracked-label text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/20"
-            style={{ color: PRIORITY_MARK[task.priority].color }} title={`${task.priority} priority`}>
+          <span className="tracked-label text-xs font-bold"
+            style={{ color: `color-mix(in srgb, ${meta.color} 65%, var(--ink))` }}>{meta.label}</span>
+          <span className="tracked-label rounded border border-ink/10 bg-surface/80 px-2 py-0.5 text-[11px] font-bold"
+            style={{ color: `color-mix(in srgb, ${PRIORITY_MARK[task.priority].color} 65%, var(--ink))` }}
+            title={`${task.priority} priority`}>
             {PRIORITY_MARK[task.priority].label}
           </span>
         </div>
-        <p className="text-sm font-medium mt-1.5 leading-snug text-white">{task.title}</p>
+        <p className="mt-2 text-base font-semibold leading-snug text-ink">{task.title}</p>
         {(task.status === "blocked" || incomplete.length > 0) && (
-          <div className="mt-2 text-[10px] rounded-sm bg-black/25 border border-white/30 px-2 py-1.5">
+          <div className="mt-2.5 rounded-sm border border-ink/15 bg-surface/75 px-2.5 py-2 text-xs text-ink">
             {task.status === "blocked" ? (
               <span className="font-semibold">
                 {task.blockedReason ? BLOCKED_REASON_LABEL[task.blockedReason] : "Stuck"}
@@ -70,24 +76,24 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
           </div>
         )}
         {requiredCerts.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
+          <div className="mt-2.5 flex flex-wrap gap-1">
             {requiredCerts.map((c) => (
-              <span key={c.id} className="tracked-label text-[9px] px-1.5 py-0.5 rounded-sm bg-white/90 text-blueprint-deep border border-white">
+              <span key={c.id} className="tracked-label rounded-sm border border-steel-line bg-surface px-2 py-0.5 text-[10px] font-bold text-blueprint-deep">
                 {c.name}
               </span>
             ))}
           </div>
         )}
-        <div className="border-t border-dashed border-white/35 mt-2.5 pt-2 flex items-center justify-between gap-2">
-          <span className="text-xs text-white/85 truncate">
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-ink/20 pt-2.5">
+          <span className="truncate text-sm font-medium text-ink">
             {assignees.length > 0 ? assignees.map((a) => a.displayName).join(", ") : "Unclaimed"}
           </span>
-          <span className="text-[10px] text-white/80 whitespace-nowrap shrink-0">
+          <span className="shrink-0 whitespace-nowrap text-xs font-medium text-steel">
             {task.dueDate ? `due ${new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}`
               : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2 mt-1.5 text-[10px] text-white/80">
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs font-medium text-steel">
           <span className="truncate">POC: {contact?.displayName ?? "Task creator"}</span>
           <span className="shrink-0 flex gap-2">
             {(task.attachments?.length ?? 0) > 0 && <span title="Attachments">▤ {task.attachments.length}</span>}
@@ -97,12 +103,12 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
       </button>
       {canClaim && (
         <button onClick={(e) => { e.stopPropagation(); if (profile) claimTask(task.id, profile.uid); }}
-          className="w-full text-center tracked-label text-[10px] font-semibold py-1.5 bg-white/90 text-success border-t border-white hover:bg-white">
+          className="tracked-label w-full border-t border-success/30 bg-success/10 py-2 text-center text-xs font-bold text-ink hover:bg-success/20">
           Claim task
         </button>
       )}
       {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && (
-        <div className="w-full text-center tracked-label text-[10px] py-1.5 bg-black/20 text-white/85 border-t border-white/30">
+        <div className="tracked-label w-full border-t border-danger/30 bg-danger/10 py-2 text-center text-xs font-bold text-ink">
           Cert required
         </div>
       )}
