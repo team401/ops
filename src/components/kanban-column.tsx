@@ -18,12 +18,11 @@ interface KanbanColumnProps {
   allTasks: Task[];
   certifications: Certification[];
   users: UserProfile[];
-  canDrag: (task: Task) => boolean;
   onOpenTask: (task: Task) => void;
 }
 
 export function KanbanColumn({
-  status, tasks, allTasks, certifications, users, canDrag, onOpenTask,
+  status, tasks, allTasks, certifications, users, onOpenTask,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const meta = STATUS_META[status];
@@ -42,7 +41,7 @@ export function KanbanColumn({
       >
         {tasks.map((task) => (
           <TaskCard key={task.id} task={task} tasks={allTasks} certifications={certifications} users={users}
-            draggable={canDrag(task)} onOpen={() => onOpenTask(task)} />
+            draggable onOpen={() => onOpenTask(task)} />
         ))}
         {tasks.length === 0 && <p className="text-xs text-steel/60 text-center py-6">Nothing here</p>}
       </div>

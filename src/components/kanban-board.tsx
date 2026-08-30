@@ -6,7 +6,6 @@ import type { Task, TaskStatus, Subteam, Certification, UserProfile } from "@/ty
 import { TASK_STATUSES } from "@/types";
 import { KanbanColumn } from "@/components/kanban-column";
 import { TaskDialog } from "@/components/task-dialog";
-import { useAuth } from "@/context/auth-context";
 import { moveTaskStatus } from "@/lib/task-actions";
 
 interface KanbanBoardProps {
@@ -27,7 +26,6 @@ export function KanbanBoard({
   createDefaultSubteam,
   editableSubteams,
 }: KanbanBoardProps) {
-  const { profile, canManageSubteam } = useAuth();
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [creating, setCreating] = useState(false);
   // Mouse: drag starts after a small movement, same as before. Touch: drag
@@ -45,12 +43,6 @@ export function KanbanBoard({
 
   function tasksFor(status: TaskStatus) {
     return scopedTasks.filter((t) => t.status === status);
-  }
-
-  function canDrag(task: Task) {
-    if (!profile) return false;
-    if (canManageSubteam(task.subteam)) return true;
-    return task.assigneeUids.includes(profile.uid);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -91,7 +83,6 @@ export function KanbanBoard({
               allTasks={tasks}
               certifications={certifications}
               users={users}
-              canDrag={canDrag}
               onOpenTask={setOpenTask}
             />
           ))}

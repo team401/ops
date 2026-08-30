@@ -91,9 +91,9 @@ service cloud.firestore {
       allow delete: if isSignedIn() && canManageSubteam(resource.data.subteam);
 
       // Updates: coaches and the task's own subteam leader can change anything,
-      // including directly setting the assignee list. A plain student may only
-      // join an open-to-them task they're certified for, leave a task they're
-      // on, or move the status of a task they're already assigned to.
+      // including directly setting the assignee list. A plain student may join
+      // an open-to-them task they're certified for, leave a task they're on,
+      // move any task between status columns, or append an update.
       allow update: if canManageSubteam(resource.data.subteam)
         || (
           isSignedIn() &&
@@ -122,10 +122,11 @@ service cloud.firestore {
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assigneeUids', 'updatedAt', 'history'])
             )
             ||
-            // Move a card you're already on: only status/updatedAt may change.
+            // Any signed-in team member may move a card. Dragging is still a
+            // narrowly scoped status operation and cannot change task details.
             (
-              resource.data.assigneeUids.hasAny([request.auth.uid]) &&
-              request.resource.data.assigneeUids == resource.data.assigneeUids &&
+              request.resource.data.status != resource.data.status &&
+              request.resource.data.status in ['backlog', 'in_progress', 'blocked', 'review', 'done'] &&
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'history'])
             )
             ||
