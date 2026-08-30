@@ -35,8 +35,14 @@ export function NavBar() {
     ...(isCoach ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
+  const currentPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  const activeHref = links
+    .filter((link) => !link.external)
+    .filter((link) => currentPath === link.href || currentPath.startsWith(link.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + "/");
+    return href === activeHref;
   }
 
   return (
@@ -76,7 +82,12 @@ export function NavBar() {
                 {link.label}
               </a>
             ) : (
-              <Link key={link.href} href={link.href} className={className}>
+              <Link
+                key={link.href}
+                href={link.href}
+                className={className}
+                aria-current={isActive(link.href) ? "page" : undefined}
+              >
                 {link.label}
               </Link>
             );
@@ -123,6 +134,7 @@ export function NavBar() {
                 href={link.href}
                 onClick={() => setMobileOpen(false)}
                 className={className}
+                aria-current={isActive(link.href) ? "page" : undefined}
               >
                 {link.label}
               </Link>
