@@ -26,6 +26,10 @@ service cloud.firestore {
       return isSignedIn() && myRole() == 'student_leader';
     }
 
+    function canManageCalendar() {
+      return isCoach() || isStudentLeader();
+    }
+
     // Student leaders are scoped to their own subteam; coaches are not.
     function canManageSubteam(subteam) {
       return isCoach() || (isStudentLeader() && myProfile().subteam == subteam);
@@ -156,6 +160,46 @@ service cloud.firestore {
             )
           )
         );
+    }
+
+    // --- calendar events ---
+    // Team-wide schedule entries are separate from Kanban tasks. Coaches and
+    // student leaders manage them; every signed-in member can see them.
+    match /calendarEvents/{eventId} {
+      function validCalendarEvent() {
+        return request.resource.data.keys().hasOnly([
+            'id', 'title', 'description', 'category', 'startDate', 'endDate',
+            'location', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.id == eventId
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 160
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 2000
+          && request.resource.data.category in [
+            'outreach', 'competition', 'deadline', 'meeting', 'other'
+          ]
+          && request.resource.data.startDate is string
+          && request.resource.data.startDate.size() == 10
+          && request.resource.data.endDate is string
+          && request.resource.data.endDate.size() == 10
+          && request.resource.data.location is string
+          && request.resource.data.location.size() <= 200
+          && request.resource.data.createdByUid is string
+          && request.resource.data.createdAt is string
+          && request.resource.data.updatedAt is string;
+      }
+
+      allow read: if isSignedIn();
+      allow create: if canManageCalendar()
+        && validCalendarEvent()
+        && request.resource.data.createdByUid == request.auth.uid;
+      allow update: if canManageCalendar()
+        && validCalendarEvent()
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if canManageCalendar();
     }
 
     // --- mechanical inventory ---

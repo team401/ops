@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem } from "@/types";
+import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem, CalendarEvent } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
 // one student drags a card, or a coach edits a cert, every open board
@@ -68,6 +68,21 @@ export function useCertifications() {
   }, []);
 
   return { certifications, loading };
+}
+
+export function useCalendarEvents() {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const source = query(collection(db, "calendarEvents"), orderBy("startDate", "asc"));
+    return onSnapshot(source, (snapshot) => {
+      setEvents(snapshot.docs.map((record) => record.data() as CalendarEvent));
+      setLoading(false);
+    });
+  }, []);
+
+  return { events, loading };
 }
 
 // null means all entries (coach); a uid means only that person's entries;

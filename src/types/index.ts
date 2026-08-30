@@ -100,6 +100,26 @@ export interface Task {
   history: TaskHistoryEntry[];
 }
 
+export type CalendarEventCategory =
+  | "outreach"
+  | "competition"
+  | "deadline"
+  | "meeting"
+  | "other";
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: CalendarEventCategory;
+  startDate: string;
+  endDate: string;
+  location: string;
+  createdByUid: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type TimeclockActivity = "shop" | "outreach";
 
 export interface TimeEntry {
