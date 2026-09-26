@@ -75,9 +75,29 @@ body {
 }
 
 .grid-paper {
-  background-image: linear-gradient(color-mix(in srgb, var(--steel-line) 62%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--steel-line) 62%, transparent) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-color: var(--paper);
+  background: var(--paper);
+}
+
+.app-header {
+  background: #861f41;
+  border-color: #65152f;
+  color: white;
+}
+
+:root[data-theme="dark"] .app-header {
+  background: #65152f;
+  border-color: #4e1024;
+}
+
+.app-header .theme-toggle-control {
+  border-color: rgb(255 255 255 / 35%);
+  background: rgb(255 255 255 / 10%);
+  color: white;
+}
+
+.app-header .theme-toggle-control:hover {
+  border-color: rgb(255 255 255 / 65%);
+  color: white;
 }
 
 .tracked-label {
