@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavLink = {
   href: string;
@@ -109,6 +110,7 @@ export function NavBar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
+          <ThemeToggle />
           <span className="hidden max-w-56 truncate text-sm text-steel sm:inline xl:hidden 2xl:inline">
             {profile.displayName}
             <span className="tracked-label text-[10px] ml-2 text-blueprint">
