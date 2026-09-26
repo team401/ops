@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { ExternalLink, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -80,7 +80,7 @@ export function NavBar() {
 
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto xl:flex">
           {links.map((link) => {
-            const className = `tracked-label whitespace-nowrap rounded px-2.5 py-2 text-[11px] 2xl:px-3 2xl:text-xs ${
+            const className = `tracked-label inline-flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-2 text-[11px] 2xl:px-3 2xl:text-xs ${
               !link.external && isActive(link.href)
                 ? "bg-white text-blueprint"
                 : "text-white/80 hover:bg-white/10 hover:text-white"
@@ -92,9 +92,11 @@ export function NavBar() {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                title={`${link.label} — opens in a new tab`}
                 className={className}
               >
                 {link.label}
+                <ExternalLink aria-hidden="true" size={11} strokeWidth={2.2} />
               </a>
             ) : (
               <Link
@@ -148,10 +150,14 @@ export function NavBar() {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                title={`${link.label} — opens in a new tab`}
                 onClick={() => setMobileOpen(false)}
                 className={className}
               >
-                {link.label}
+                <span className="flex items-center gap-1.5">
+                  {link.label}
+                  <ExternalLink aria-hidden="true" size={12} strokeWidth={2.2} />
+                </span>
               </a>
             ) : (
               <Link
