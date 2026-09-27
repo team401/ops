@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --ink: #14181c;
-  --paper: #e9eae4;
-  --paper-raised: #f6f6f2;
+  color-scheme: light;
+  --ink: #202326;
+  --paper: #f3f5f7;
+  --paper-raised: #ffffff;
   --surface: #ffffff;
-  --blueprint: #1e5f8c;
-  --blueprint-deep: #123b57;
-  --hazard: #e0a23a;
-  --steel: #6b7280;
-  --steel-line: #d3d4cd;
+  --blueprint: #861f41;
+  --blueprint-deep: #65152f;
+  --hazard: #d6552d;
+  --steel: #687078;
+  --steel-line: #dce1e5;
   --success: #3f8f5f;
   --danger: #b1443a;
   --mech: #3d5a80;
@@ -20,17 +21,17 @@
   --finance: #3f7b68;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e9eae6;
-    --paper: #14171a;
-    --paper-raised: #1c2024;
-    --surface: #22262b;
-    --blueprint: #4d93c4;
-    --blueprint-deep: #2e5f82;
-    --hazard: #e3ac47;
-    --steel: #9199a1;
-    --steel-line: #33383d;
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --ink: #f2f4f5;
+    --paper: #171a1c;
+    --paper-raised: #202426;
+    --surface: #252a2d;
+    --blueprint: #e09ab3;
+    --blueprint-deep: #f0b8cb;
+    --hazard: #ef865f;
+    --steel: #aab1b6;
+    --steel-line: #363c40;
     --success: #4fae74;
     --danger: #d1584c;
     --mech: #55789f;
@@ -39,7 +40,6 @@
     --cad: #78699a;
     --outreach: #9e6040;
     --finance: #397663;
-  }
 }
 
 @theme inline {
@@ -70,10 +70,34 @@ body {
   font-family: var(--font-sans);
 }
 
+::selection {
+  background: color-mix(in srgb, var(--blueprint) 24%, transparent);
+}
+
 .grid-paper {
-  background-image: linear-gradient(var(--steel-line) 1px, transparent 1px), linear-gradient(90deg, var(--steel-line) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-color: var(--paper);
+  background: var(--paper);
+}
+
+.app-header {
+  background: #861f41;
+  border-color: #65152f;
+  color: white;
+}
+
+:root[data-theme="dark"] .app-header {
+  background: #65152f;
+  border-color: #4e1024;
+}
+
+.app-header .theme-toggle-control {
+  border-color: rgb(255 255 255 / 35%);
+  background: rgb(255 255 255 / 10%);
+  color: white;
+}
+
+.app-header .theme-toggle-control:hover {
+  border-color: rgb(255 255 255 / 65%);
+  color: white;
 }
 
 .tracked-label {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import { Providers } from "./providers";
 import { withBasePath } from "@/lib/base-path";
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body
         className="min-h-full flex flex-col"
         style={{
@@ -29,6 +30,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         }}
       >
         <Providers>{children}</Providers>
+        <Script id="team401-theme" strategy="beforeInteractive">
+          {`try{const saved=localStorage.getItem('team401-theme');const theme=saved==='light'||saved==='dark'?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme}catch{}`}
+        </Script>
       </body>
     </html>
   );

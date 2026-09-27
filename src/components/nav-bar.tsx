@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { ExternalLink, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavLink = {
   href: string;
@@ -57,12 +58,12 @@ export function NavBar() {
   }
 
   return (
-    <header className="relative z-50 border-b border-steel-line bg-paper-raised">
+    <header className="app-header relative z-50 border-b">
       <div className="flex h-14 w-full items-center gap-3 px-3 sm:px-4 xl:px-6">
         <button
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
-          className="-ml-1 flex min-h-10 min-w-10 items-center justify-center rounded text-steel hover:bg-paper xl:hidden"
+          className="-ml-1 flex min-h-10 min-w-10 items-center justify-center rounded text-white hover:bg-white/10 xl:hidden"
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-expanded={mobileOpen}
           aria-controls="primary-navigation"
@@ -72,17 +73,17 @@ export function NavBar() {
 
         <Link
           href="/board"
-          className="tracked-label shrink-0 text-xs font-bold text-blueprint hover:text-blueprint-deep"
+          className="tracked-label shrink-0 text-xs font-bold text-white hover:text-white"
         >
           401 Ops
         </Link>
 
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto xl:flex">
           {links.map((link) => {
-            const className = `tracked-label whitespace-nowrap rounded px-2.5 py-2 text-[11px] 2xl:px-3 2xl:text-xs ${
+            const className = `tracked-label inline-flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-2 text-[11px] 2xl:px-3 2xl:text-xs ${
               !link.external && isActive(link.href)
-                ? "bg-blueprint text-white"
-                : "text-steel hover:text-ink"
+                ? "bg-white text-blueprint"
+                : "text-white/80 hover:bg-white/10 hover:text-white"
             }`;
 
             return link.external ? (
@@ -91,9 +92,11 @@ export function NavBar() {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                title={`${link.label} — opens in a new tab`}
                 className={className}
               >
                 {link.label}
+                <ExternalLink aria-hidden="true" size={11} strokeWidth={2.2} />
               </a>
             ) : (
               <Link
@@ -109,13 +112,17 @@ export function NavBar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
-          <span className="hidden max-w-56 truncate text-sm text-steel sm:inline xl:hidden 2xl:inline">
+          <ThemeToggle />
+          <span className="hidden max-w-56 truncate text-sm text-white/85 sm:inline xl:hidden 2xl:inline">
             {profile.displayName}
-            <span className="tracked-label text-[10px] ml-2 text-blueprint">
+            <span className="tracked-label ml-2 text-[10px] text-orange-200">
               {profile.role.replace("_", " ")}
             </span>
           </span>
-          <button onClick={() => signOut()} className="btn-secondary text-xs px-2 py-1">
+          <button
+            onClick={() => signOut()}
+            className="rounded border border-white/30 bg-transparent px-2 py-1 text-xs font-medium text-white hover:border-white/60 hover:bg-white/10"
+          >
             Sign out
           </button>
         </div>
@@ -124,15 +131,17 @@ export function NavBar() {
       {mobileOpen && (
         <nav
           id="primary-navigation"
-          className="absolute left-0 right-0 top-full max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-steel-line bg-paper-raised p-2 shadow-lg xl:hidden"
+          className="absolute left-0 right-0 top-full max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-white/20 bg-blueprint p-2 shadow-lg xl:hidden"
         >
-          <p className="px-3 py-2 text-xs text-steel sm:hidden">
+          <p className="px-3 py-2 text-xs text-white/75 sm:hidden">
             {profile.displayName} · {profile.role.replace("_", " ")}
           </p>
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((link) => {
             const className = `block tracked-label text-xs px-3 py-2.5 rounded ${
-              !link.external && isActive(link.href) ? "bg-blueprint text-white" : "text-steel"
+              !link.external && isActive(link.href)
+                ? "bg-white text-blueprint"
+                : "text-white/80 hover:bg-white/10 hover:text-white"
             }`;
 
             return link.external ? (
@@ -141,10 +150,14 @@ export function NavBar() {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                title={`${link.label} — opens in a new tab`}
                 onClick={() => setMobileOpen(false)}
                 className={className}
               >
-                {link.label}
+                <span className="flex items-center gap-1.5">
+                  {link.label}
+                  <ExternalLink aria-hidden="true" size={12} strokeWidth={2.2} />
+                </span>
               </a>
             ) : (
               <Link
