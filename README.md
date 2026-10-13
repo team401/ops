@@ -175,15 +175,10 @@ The project is configured for static export and includes `.github/workflows/depl
 
 Add each `NEXT_PUBLIC_FIREBASE_*` value listed above as a GitHub Actions repository secret, then configure **Settings → Pages** to use **GitHub Actions** as the deployment source.
 
-The GitHub Pages base path is derived from the repository name in `next.config.ts`:
-
-```ts
-const repoName = "ops";
-```
-
-With the repository named `ops`, the project site is published at
-`https://team401.github.io/ops/` or at `/ops/` beneath the team's configured
-custom domain. Update this value if the repository is renamed again.
+The production site is published at `https://ops.team401.org/`. The app is
+built without a base path because the custom domain serves it from the domain
+root. In **Settings → Pages**, keep **GitHub Actions** as the deployment source
+and `ops.team401.org` as the custom domain.
 
 ## Operational notes
 
