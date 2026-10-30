@@ -3,7 +3,7 @@
   "extends": [
     "github>team401/renovate-config"
   ],
-  "baseBranches": [
+  "baseBranchPatterns": [
     "staging"
   ],
   "automergeType": "pr",
