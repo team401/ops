@@ -180,6 +180,14 @@ built without a base path because the custom domain serves it from the domain
 root. In **Settings → Pages**, keep **GitHub Actions** as the deployment source
 and `ops.team401.org` as the custom domain.
 
+The `staging` branch is published alongside production at
+`https://ops.team401.org/staging/`. Both builds use the same Firebase project
+and therefore the same accounts and data; staging is only a UI/code preview.
+Renovate targets `staging` and automatically merges updates only after the
+install, lint, and production-build checks pass. Promote tested staging changes
+to `main` with a manually reviewed pull request. Automation must not merge that
+promotion PR.
+
 ## Operational notes
 
 - Removing someone from the Admin roster deletes their Firestore profile but not their Firebase Authentication record. Delete the Authentication user from the Firebase console when access must be fully revoked.
