@@ -29,6 +29,9 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id, disabled: !draggable });
   const meta = SUBTEAM_META[task.subteam];
   const assignees = users.filter((u) => task.assigneeUids.includes(u.uid));
+  const imageAttachments = (task.attachments ?? []).filter((attachment) =>
+    attachment.contentType.startsWith("image/")
+  );
   const requiredCerts = certifications.filter((c) => task.requiredCertificationIds.includes(c.id));
   const contact = users.find((u) => u.uid === (task.pointOfContactUid || task.createdByUid));
   const incomplete = incompletePrerequisites(task, tasks);
@@ -69,7 +72,27 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
             {PRIORITY_MARK[task.priority].label}
           </span>
         </div>
-        <p className="mt-2 text-base font-semibold leading-snug text-ink">{task.title}</p>
+        <p className="mt-2 break-words text-base font-semibold leading-snug text-ink">{task.title}</p>
+        {task.description && (
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink/85">
+            {task.description}
+          </p>
+        )}
+        {imageAttachments.length > 0 && (
+          <div className={`mt-3 grid gap-2 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+            {imageAttachments.map((attachment) => (
+              // User uploads have dynamic Firebase URLs, and this app is a static export.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={attachment.id}
+                src={attachment.url}
+                alt={attachment.name}
+                className="max-h-64 w-full rounded border border-ink/15 bg-surface object-contain"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        )}
         {(task.status === "blocked" || incomplete.length > 0) && (
           <div className="mt-2.5 rounded-sm border border-ink/15 bg-surface/75 px-2.5 py-2 text-xs text-ink">
             {task.status === "blocked" ? (
@@ -91,8 +114,8 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
             ))}
           </div>
         )}
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-ink/20 pt-2.5">
-          <span className="truncate text-sm font-medium text-ink">
+        <div className="mt-3 flex items-start justify-between gap-2 border-t border-dashed border-ink/20 pt-2.5">
+          <span className="min-w-0 flex-1 break-words text-sm font-medium text-ink">
             {assignees.length > 0 ? assignees.map((a) => a.displayName).join(", ") : "Unclaimed"}
           </span>
           <span className="shrink-0 whitespace-nowrap text-xs font-medium text-steel">
@@ -100,8 +123,8 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
               : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
           </span>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-2 text-xs font-medium text-steel">
-          <span className="truncate">POC: {contact?.displayName ?? "Task creator"}</span>
+        <div className="mt-2 flex items-start justify-between gap-2 text-xs font-medium text-steel">
+          <span className="min-w-0 flex-1 break-words">POC: {contact?.displayName ?? "Task creator"}</span>
           <span className="shrink-0 flex gap-2">
             {(task.attachments?.length ?? 0) > 0 && <span title="Attachments">▤ {task.attachments.length}</span>}
             {(task.comments?.length ?? 0) > 0 && <span title="Updates">◫ {task.comments.length}</span>}
