@@ -619,15 +619,29 @@ export function TaskDialog({
           {(attachments.length > 0 || pendingFiles.length > 0) && (
             <div className="mt-2 space-y-1.5">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="flex items-center gap-2 rounded border border-steel-line bg-surface px-2.5 py-2 text-sm">
-                  <span aria-hidden="true">{attachment.contentType.startsWith("image/") ? "▧" : "▤"}</span>
-                  <a href={attachment.url} target="_blank" rel="noreferrer" className="text-blueprint hover:underline truncate flex-1">
-                    {attachment.name}
-                  </a>
-                  <span className="text-[10px] text-steel shrink-0">{formatFileSize(attachment.size)}</span>
-                  {(canManageThisTask || isOnThisTask) && (
-                    <button type="button" onClick={() => handleRemoveAttachment(attachment)} className="text-danger text-xs">Remove</button>
+                <div key={attachment.id} className="rounded border border-steel-line bg-surface p-2.5 text-sm">
+                  {attachment.contentType.startsWith("image/") && (
+                    <a href={attachment.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                      {/* User uploads use dynamic Firebase URLs in this static export. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={attachment.url}
+                        alt={attachment.name}
+                        className="max-h-80 w-full rounded-sm border border-steel-line bg-paper object-contain"
+                        loading="lazy"
+                      />
+                    </a>
                   )}
+                  <div className="flex items-center gap-2">
+                    <span aria-hidden="true">{attachment.contentType.startsWith("image/") ? "▧" : "▤"}</span>
+                    <a href={attachment.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 break-words text-blueprint hover:underline">
+                      {attachment.name}
+                    </a>
+                    <span className="shrink-0 text-[10px] text-steel">{formatFileSize(attachment.size)}</span>
+                    {(canManageThisTask || isOnThisTask) && (
+                      <button type="button" onClick={() => handleRemoveAttachment(attachment)} className="text-xs text-danger">Remove</button>
+                    )}
+                  </div>
                 </div>
               ))}
               {pendingFiles.map((file, index) => (

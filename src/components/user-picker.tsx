@@ -36,7 +36,7 @@ export function UserPicker({
   const matches = users
     .filter((u) => !selectedUids.includes(u.uid))
     .filter((u) => u.displayName.toLowerCase().includes(query.toLowerCase()))
-    .slice(0, 8);
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   function add(uid: string) {
     onChange([...selectedUids, uid]);
@@ -82,7 +82,7 @@ export function UserPicker({
             placeholder={placeholder}
           />
           {open && matches.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full bg-surface border border-steel-line rounded shadow-md max-h-48 overflow-y-auto">
+            <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded border border-steel-line bg-surface shadow-md">
               {matches.map((u) => (
                 <button
                   type="button"
@@ -91,9 +91,9 @@ export function UserPicker({
                   className="w-full text-left px-3 py-1.5 text-sm hover:bg-blueprint/10 flex items-center justify-between"
                 >
                   <span>{u.displayName}</span>
-                  {u.role === "coach" && (
-                    <span className="tracked-label text-[9px] text-steel">coach</span>
-                  )}
+                  <span className="tracked-label text-[9px] text-steel">
+                    {u.role === "coach" ? "coach" : u.role === "student_leader" ? "student leader" : "student"}
+                  </span>
                 </button>
               ))}
             </div>
