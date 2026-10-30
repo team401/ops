@@ -2,5 +2,20 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>team401/renovate-config"
+  ],
+  "baseBranches": [
+    "staging"
+  ],
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "ignoreTests": false,
+  "packageRules": [
+    {
+      "description": "Hold TypeScript 7 until typescript-eslint supports it",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7"
+    }
   ]
 }
