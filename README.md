@@ -183,10 +183,11 @@ and `ops.team401.org` as the custom domain.
 The `staging` branch is published alongside production at
 `https://ops.team401.org/staging/`. Both builds use the same Firebase project
 and therefore the same accounts and data; staging is only a UI/code preview.
-Renovate targets `staging` and automatically merges updates only after the
-install, lint, and production-build checks pass. Promote tested staging changes
-to `main` with a manually reviewed pull request. Automation must not merge that
-promotion PR.
+Renovate targets `staging` and automatically merges routine non-major updates
+only after the install, lint, and production-build checks pass. Major updates
+remain manual because a green build cannot prove runtime compatibility. Promote
+tested staging changes to `main` with a manually reviewed pull request.
+Automation must not merge that promotion PR.
 
 ## Operational notes
 

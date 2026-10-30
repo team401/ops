@@ -11,13 +11,6 @@
   "ignoreTests": false,
   "packageRules": [
     {
-      "description": "Automerge verified major updates into staging",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "automerge": true
-    },
-    {
       "description": "Hold TypeScript 7 until typescript-eslint supports it",
       "matchPackageNames": [
         "typescript"
