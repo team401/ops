@@ -55,10 +55,10 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
       }}
       className="relative rounded-sm border border-l-4 border-ink/15 text-ink shadow-sm transition-shadow hover:shadow-md">
       <button onClick={onOpen} {...(draggable ? { ...listeners, ...attributes } : {})}
-        className={`w-full p-3.5 text-left ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}>
+        className={`w-full p-2.5 text-left ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="tracked-label text-xs font-bold"
+            <span className="tracked-label text-[10px] font-bold"
               style={{ color: `color-mix(in srgb, ${meta.color} 65%, var(--ink))` }}>{meta.label}</span>
             {task.leadersOnly && (
               <span className="tracked-label rounded-sm border border-blueprint/25 bg-blueprint/10 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">
@@ -66,20 +66,20 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
               </span>
             )}
           </div>
-          <span className="tracked-label rounded border border-ink/10 bg-surface/80 px-2 py-0.5 text-[11px] font-bold"
+          <span className="tracked-label rounded border border-ink/10 bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold"
             style={{ color: `color-mix(in srgb, ${PRIORITY_MARK[task.priority].color} 65%, var(--ink))` }}
             title={`${task.priority} priority`}>
             {PRIORITY_MARK[task.priority].label}
           </span>
         </div>
-        <p className="mt-2 break-words text-base font-semibold leading-snug text-ink">{task.title}</p>
+        <p className="mt-1.5 break-words text-sm font-semibold leading-snug text-ink">{task.title}</p>
         {task.description && (
-          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink/85">
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/85">
             {task.description}
           </p>
         )}
         {imageAttachments.length > 0 && (
-          <div className={`mt-3 grid gap-2 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+          <div className={`mt-2 grid gap-1.5 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
             {imageAttachments.map((attachment) => (
               // User uploads have dynamic Firebase URLs, and this app is a static export.
               // eslint-disable-next-line @next/next/no-img-element
@@ -87,35 +87,35 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
                 key={attachment.id}
                 src={attachment.url}
                 alt={attachment.name}
-                className="max-h-64 w-full rounded border border-ink/15 bg-surface object-contain"
+                className="max-h-40 w-full rounded border border-ink/15 bg-surface object-contain"
                 loading="lazy"
               />
             ))}
           </div>
         )}
         {(task.status === "blocked" || incomplete.length > 0) && (
-          <div className="mt-2.5 rounded-sm border border-ink/15 bg-surface/75 px-2.5 py-2 text-xs text-ink">
-            {task.status === "blocked" ? (
+          <div className="mt-1.5 rounded-sm border border-ink/15 bg-surface/75 px-2 py-1.5 text-xs text-ink">
+            {incomplete.length > 0 ? (
+              <span>Waiting on {incomplete.map((prerequisite) => prerequisite.title).join(", ")}</span>
+            ) : (
               <span className="font-semibold">
                 {task.blockedReason ? BLOCKED_REASON_LABEL[task.blockedReason] : "Stuck"}
                 {task.blockedDetails ? ` — ${task.blockedDetails}` : ""}
               </span>
-            ) : (
-              <span>Waiting on {incomplete.length} prerequisite{incomplete.length === 1 ? "" : "s"}</span>
             )}
           </div>
         )}
         {requiredCerts.length > 0 && (
-          <div className="mt-2.5 flex flex-wrap gap-1">
+          <div className="mt-1.5 flex flex-wrap gap-1">
             {requiredCerts.map((c) => (
-              <span key={c.id} className="tracked-label rounded-sm border border-steel-line bg-surface px-2 py-0.5 text-[10px] font-bold text-blueprint-deep">
+              <span key={c.id} className="tracked-label rounded-sm border border-steel-line bg-surface px-1.5 py-0.5 text-[9px] font-bold text-blueprint-deep">
                 {c.name}
               </span>
             ))}
           </div>
         )}
-        <div className="mt-3 flex items-start justify-between gap-2 border-t border-dashed border-ink/20 pt-2.5">
-          <span className="min-w-0 flex-1 break-words text-sm font-medium text-ink">
+        <div className="mt-2 flex items-start justify-between gap-2 border-t border-dashed border-ink/20 pt-1.5">
+          <span className="min-w-0 flex-1 break-words text-xs font-medium text-ink">
             {assignees.length > 0 ? assignees.map((a) => a.displayName).join(", ") : "Unclaimed"}
           </span>
           <span className="shrink-0 whitespace-nowrap text-xs font-medium text-steel">
@@ -123,7 +123,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
               : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
           </span>
         </div>
-        <div className="mt-2 flex items-start justify-between gap-2 text-xs font-medium text-steel">
+        <div className="mt-1.5 flex items-start justify-between gap-2 text-[11px] font-medium text-steel">
           <span className="min-w-0 flex-1 break-words">POC: {contact?.displayName ?? "Task creator"}</span>
           <span className="shrink-0 flex gap-2">
             {(task.attachments?.length ?? 0) > 0 && <span title="Attachments">▤ {task.attachments.length}</span>}
@@ -133,12 +133,12 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
       </button>
       {canClaim && (
         <button onClick={(e) => { e.stopPropagation(); if (profile) claimTask(task.id, profile.uid); }}
-          className="tracked-label w-full border-t border-success/30 bg-success/10 py-2 text-center text-xs font-bold text-ink hover:bg-success/20">
+          className="tracked-label w-full border-t border-success/30 bg-success/10 py-1.5 text-center text-[10px] font-bold text-ink hover:bg-success/20">
           Claim task
         </button>
       )}
       {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && (
-        <div className="tracked-label w-full border-t border-danger/30 bg-danger/10 py-2 text-center text-xs font-bold text-ink">
+        <div className="tracked-label w-full border-t border-danger/30 bg-danger/10 py-1.5 text-center text-[10px] font-bold text-ink">
           Cert required
         </div>
       )}

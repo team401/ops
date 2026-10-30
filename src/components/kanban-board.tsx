@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { DndContext, DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { Task, TaskStatus, Subteam, Certification, UserProfile } from "@/types";
 import { TASK_STATUSES } from "@/types";
@@ -16,6 +16,7 @@ interface KanbanBoardProps {
   subteam?: Subteam;
   createDefaultSubteam: Subteam;
   editableSubteams: Subteam[];
+  toolbar?: ReactNode;
 }
 
 export function KanbanBoard({
@@ -25,6 +26,7 @@ export function KanbanBoard({
   subteam,
   createDefaultSubteam,
   editableSubteams,
+  toolbar,
 }: KanbanBoardProps) {
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [creating, setCreating] = useState(false);
@@ -62,19 +64,20 @@ export function KanbanBoard({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-steel">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {toolbar && <div className="flex flex-wrap items-center gap-1.5">{toolbar}</div>}
+        <p className={`${toolbar ? "ml-1" : ""} whitespace-nowrap text-sm text-steel`}>
           {scopedTasks.length} task{scopedTasks.length === 1 ? "" : "s"}
         </p>
         {canCreateHere && (
-          <button onClick={() => setCreating(true)} className="btn-primary text-sm">
+          <button onClick={() => setCreating(true)} className="btn-primary ml-auto text-sm">
             + New task
           </button>
         )}
       </div>
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 gap-3 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto">
+        <div className="grid grid-cols-1 gap-2 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn
               key={status}

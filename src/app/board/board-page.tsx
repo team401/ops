@@ -23,24 +23,6 @@ export default function BoardPage() {
 
   return (
     <AppShell>
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold">All-team board</h1>
-        <p className="text-sm text-steel">See how tasks are distributed across every subteam.</p>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 mb-5">
-        <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="All subteams" />
-        {SUBTEAMS.map((s) => (
-          <FilterChip
-            key={s}
-            active={filter === s}
-            onClick={() => setFilter(s)}
-            label={SUBTEAM_META[s].label}
-            color={SUBTEAM_META[s].color}
-          />
-        ))}
-      </div>
-
       <KanbanBoard
         tasks={tasks}
         certifications={certifications}
@@ -48,6 +30,20 @@ export default function BoardPage() {
         subteam={filter === "all" ? undefined : filter}
         createDefaultSubteam={filter === "all" ? editableSubteams[0] ?? "mechanical" : filter}
         editableSubteams={editableSubteams}
+        toolbar={(
+          <>
+            <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="All subteams" />
+            {SUBTEAMS.map((s) => (
+              <FilterChip
+                key={s}
+                active={filter === s}
+                onClick={() => setFilter(s)}
+                label={SUBTEAM_META[s].label}
+                color={SUBTEAM_META[s].color}
+              />
+            ))}
+          </>
+        )}
       />
     </AppShell>
   );
