@@ -4,12 +4,12 @@ import { useDroppable } from "@dnd-kit/core";
 import type { Task, TaskStatus, Certification, UserProfile } from "@/types";
 import { TaskCard } from "@/components/task-card";
 
-const STATUS_META: Record<TaskStatus, { label: string; step: string }> = {
-  backlog: { label: "Backlog", step: "01" },
-  in_progress: { label: "In progress", step: "02" },
-  blocked: { label: "Stuck", step: "03" },
-  review: { label: "Review", step: "04" },
-  done: { label: "Done", step: "05" },
+const STATUS_META: Record<TaskStatus, { label: string }> = {
+  backlog: { label: "Backlog" },
+  in_progress: { label: "In progress" },
+  blocked: { label: "Stuck" },
+  review: { label: "Review" },
+  done: { label: "Done" },
 };
 
 interface KanbanColumnProps {
@@ -28,15 +28,14 @@ export function KanbanColumn({
   const meta = STATUS_META[status];
 
   return (
-    <div className="flex w-full flex-col xl:h-[calc(100dvh-14rem)] xl:min-h-[360px] xl:min-w-[240px] xl:flex-1 xl:shrink-0">
-      <div className="flex items-baseline gap-2 px-1 py-2 mb-2 sticky top-0 z-20 bg-paper/95 backdrop-blur-sm">
-        <span className="tracked-label text-[10px] text-steel">{meta.step}</span>
+    <div className="flex w-full flex-col xl:h-[calc(100dvh-10rem)] xl:min-h-[360px] xl:min-w-[240px] xl:flex-1 xl:shrink-0">
+      <div className="sticky top-0 z-20 mb-1 flex items-baseline gap-2 bg-paper/95 px-1 py-1.5 backdrop-blur-sm">
         <h3 className="tracked-label text-xs font-bold">{meta.label}</h3>
         <span className="text-[10px] text-steel ml-auto">{tasks.length}</span>
       </div>
       <div
         ref={setNodeRef}
-        className={`min-h-[120px] flex-1 space-y-2 rounded border border-dashed p-2 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver ? "border-blueprint bg-blueprint/5" : "border-steel-line/60"
+        className={`min-h-[120px] flex-1 space-y-1.5 rounded border border-dashed p-1.5 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver ? "border-blueprint bg-blueprint/5" : "border-steel-line/60"
           }`}
       >
         {tasks.map((task) => (
