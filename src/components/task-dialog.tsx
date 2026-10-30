@@ -72,6 +72,8 @@ export function TaskDialog({
   const dragDepth = useRef(0);
   const [changingStatus, setChangingStatus] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canManageThisTask = task ? canManageSubteam(task.subteam) : true;
@@ -193,9 +195,16 @@ export function TaskDialog({
 
   async function handleDelete() {
     if (!task) return;
-    if (!confirm(`Delete "${task.title}"? This can't be undone.`)) return;
-    await deleteTask(task);
-    onClose();
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteTask(task);
+      onClose();
+    } catch {
+      setError("Could not delete this task. Check your connection and try again.");
+      setDeleting(false);
+      setConfirmingDelete(false);
+    }
   }
 
   async function handleLeave() {
@@ -311,13 +320,17 @@ export function TaskDialog({
   }
 
   return (
-    <ModalBackdrop onClose={onClose}>
+    <>
+    <ModalBackdrop onClose={confirmingDelete ? () => setConfirmingDelete(false) : onClose}>
       <form
         onSubmit={handleSubmit}
         className="max-h-[calc(100dvh-1rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded border border-steel-line bg-paper-raised p-4 sm:max-h-[calc(100dvh-2rem)] sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-dialog-title"
       >
         <div className="flex items-center justify-between">
-          <h2 className="tracked-label text-xs text-blueprint font-bold">
+          <h2 id="task-dialog-title" className="tracked-label text-xs text-blueprint font-bold">
             {mode === "create" ? "New task" : readOnly ? "Task" : "Edit task"}
           </h2>
           <button type="button" onClick={onClose} className="text-steel text-sm">
@@ -676,7 +689,7 @@ export function TaskDialog({
           {canDelete && (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setConfirmingDelete(true)}
               className="text-danger text-xs tracked-label ml-auto"
             >
               Delete task
@@ -685,6 +698,38 @@ export function TaskDialog({
         </div>
       </form>
     </ModalBackdrop>
+    {confirmingDelete && task && (
+      <ModalBackdrop onClose={() => setConfirmingDelete(false)}>
+        <section
+          className="w-full max-w-sm rounded border border-danger/30 bg-paper-raised p-5 shadow-xl"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-task-title"
+          aria-describedby="delete-task-description"
+        >
+          <p className="tracked-label text-[10px] font-bold text-danger">Permanent action</p>
+          <h2 id="delete-task-title" className="mt-2 text-lg font-semibold text-ink">Delete this task?</h2>
+          <p id="delete-task-description" className="mt-2 text-sm text-steel">
+            “{task.title}” and its updates will be permanently deleted. This cannot be undone.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="btn-secondary"
+              disabled={deleting}
+              autoFocus
+            >
+              Keep task
+            </button>
+            <button type="button" onClick={handleDelete} className="btn-danger" disabled={deleting}>
+              {deleting ? "Deleting…" : "Delete task"}
+            </button>
+          </div>
+        </section>
+      </ModalBackdrop>
+    )}
+    </>
   );
 }
 
