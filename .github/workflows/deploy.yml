@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
 
 permissions:
@@ -18,18 +18,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out production
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: production
+
+      - name: Check out staging
+        uses: actions/checkout@v7
+        with:
+          ref: staging
+          path: staging
 
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            production/package-lock.json
+            staging/package-lock.json
 
-      - run: npm ci
+      - name: Install production dependencies
+        working-directory: production
+        run: npm ci
 
-      # Firebase config is public-safe but still injected via repo secrets
-      # (Settings > Secrets and variables > Actions) rather than committed.
-      - name: Build static export
+      - name: Install staging dependencies
+        working-directory: staging
+        run: npm ci
+
+      - name: Build production
+        working-directory: production
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
@@ -39,9 +57,27 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
         run: npm run build
 
+      - name: Build staging
+        working-directory: staging
+        env:
+          NEXT_PUBLIC_BASE_PATH: /staging
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+        run: npm run build
+
+      - name: Assemble production and staging site
+        run: |
+          mkdir -p site/staging
+          cp -R production/out/. site/
+          cp -R staging/out/. site/staging/
+
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: ./out
+          path: ./site
 
   deploy:
     needs: build
