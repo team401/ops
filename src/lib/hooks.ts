@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
 import { certificationsUseD1, fetchCertifications } from "@/lib/certification-api";
 import { fetchCalendarEvents, fetchTimeEntries, fetchTimeclockPins, operationsUseD1 } from "@/lib/operations-api";
+import { coreUsesD1, fetchTasks, fetchUsers } from "@/lib/core-api";
 import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem, CalendarEvent } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
@@ -21,6 +22,12 @@ export function useTasks() {
 
   useEffect(() => {
     if (!role) return;
+    if (coreUsesD1()) {
+      let active = true;
+      const load = () => fetchTasks().then((records) => { if (active) { setTasks(records.sort((a, b) => b.createdAt.localeCompare(a.createdAt))); setLoadedRole(role); } }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load(); const interval = window.setInterval(load, 20_000); window.addEventListener("ops:tasks-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:tasks-changed", load); };
+    }
     const source = role === "student"
       ? query(collection(db, "tasks"), where("leadersOnly", "==", false))
       : collection(db, "tasks");
@@ -66,6 +73,12 @@ export function useUsers() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (coreUsesD1()) {
+      let active = true;
+      const load = () => fetchUsers().then((records) => { if (active) setUsers(records); }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load(); const interval = window.setInterval(load, 60_000); window.addEventListener("ops:users-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:users-changed", load); };
+    }
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
       setUsers(snap.docs.map((d) => d.data() as UserProfile));
       setLoading(false);

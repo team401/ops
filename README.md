@@ -187,6 +187,12 @@ D1** once from the same Admin tab; device sessions move automatically as each
 browser reconnects. Firestore records are retained throughout the rollback
 window.
 
+The final `0003_users_tasks.sql` migration moves user profiles and complete
+task records together. Run **Copy users and tasks to D1** from Admin after the
+preview deploys. Once verified, normal application data and authorization use
+D1; Firebase remains the authentication provider and an undeleted rollback
+snapshot.
+
 ## Timeclock and kiosk security
 
 Only a coach can launch the kiosk. Kiosk PINs identify which team member is clocking in or out; they are not Firebase passwords and cannot be used to sign into the main application.

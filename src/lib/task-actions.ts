@@ -11,6 +11,9 @@ import {
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import type { Task, TaskStatus, TaskHistoryEntry, TaskComment, TaskAttachment } from "@/types";
+import { coreUsesD1, createD1Task, deleteD1Task, fetchTasks, patchD1Task } from "@/lib/core-api";
+
+async function currentTask(taskId: string) { const task = (await fetchTasks()).find((item) => item.id === taskId); if (!task) throw new Error("Task not found."); return task; }
 
 export async function createTask(
   input: Omit<Task, "id" | "createdAt" | "updatedAt" | "status" | "assigneeUids" | "history"> & {
@@ -28,17 +31,18 @@ export async function createTask(
   const task: Task = {
     ...input,
     assigneeUids,
-    id: ref.id,
+    id: coreUsesD1() ? crypto.randomUUID() : ref.id,
     status: "backlog",
     createdAt: now,
     updatedAt: now,
     history,
   };
-  await setDoc(ref, task);
+  if (coreUsesD1()) await createD1Task(task); else await setDoc(ref, task);
   return task;
 }
 
 export async function updateTask(taskId: string, changes: Partial<Task>) {
+  if (coreUsesD1()) { await patchD1Task(taskId, { ...changes, updatedAt: new Date().toISOString() }); return; }
   await updateDoc(doc(db, "tasks", taskId), {
     ...changes,
     updatedAt: new Date().toISOString(),
@@ -52,6 +56,7 @@ export async function addTaskComment(taskId: string, body: string, authorUid: st
     authorUid,
     createdAt: new Date().toISOString(),
   };
+  if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { comments: [...task.comments, comment], updatedAt: comment.createdAt }); return comment; }
   await updateDoc(doc(db, "tasks", taskId), {
     comments: arrayUnion(comment),
     updatedAt: comment.createdAt,
@@ -92,6 +97,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
       createdAt: new Date().toISOString(),
     };
     try {
+      if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { attachments: [...task.attachments, attachment], updatedAt: attachment.createdAt }); return attachment; }
       await updateDoc(doc(db, "tasks", taskId), {
         attachments: arrayUnion(attachment),
         updatedAt: attachment.createdAt,
@@ -135,6 +141,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
 
 export async function removeTaskAttachment(taskId: string, attachment: TaskAttachment) {
   await deleteAttachmentObject(taskId, attachment);
+  if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { attachments: task.attachments.filter((item) => item.id !== attachment.id), updatedAt: new Date().toISOString() }); return; }
   await updateDoc(doc(db, "tasks", taskId), {
     attachments: arrayRemove(attachment),
     updatedAt: new Date().toISOString(),
@@ -145,7 +152,7 @@ export async function deleteTask(task: Task) {
   await Promise.allSettled(
     (task.attachments ?? []).map((attachment) => deleteAttachmentObject(task.id, attachment))
   );
-  await deleteDoc(doc(db, "tasks", task.id));
+  if (coreUsesD1()) await deleteD1Task(task.id); else await deleteDoc(doc(db, "tasks", task.id));
 }
 
 async function deleteAttachmentObject(taskId: string, attachment: TaskAttachment) {
@@ -173,6 +180,7 @@ async function deleteR2Attachment(taskId: string, attachment: TaskAttachment) {
 // friendly failure client-side.
 export async function claimTask(taskId: string, studentUid: string) {
   const entry: TaskHistoryEntry = { type: "assigned", uid: studentUid, at: new Date().toISOString() };
+  if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { assigneeUids: [...task.assigneeUids, studentUid], history: [...task.history, entry], updatedAt: entry.at }); return; }
   await updateDoc(doc(db, "tasks", taskId), {
     assigneeUids: arrayUnion(studentUid),
     history: arrayUnion(entry),
@@ -184,6 +192,7 @@ export async function claimTask(taskId: string, studentUid: string) {
 // any) are left in place and the status is left as-is.
 export async function leaveTask(taskId: string, uid: string) {
   const entry: TaskHistoryEntry = { type: "unassigned", uid, at: new Date().toISOString() };
+  if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { assigneeUids: task.assigneeUids.filter((item) => item !== uid), history: [...task.history, entry], updatedAt: entry.at }); return; }
   await updateDoc(doc(db, "tasks", taskId), {
     assigneeUids: arrayRemove(uid),
     history: arrayUnion(entry),
@@ -202,6 +211,7 @@ export async function setAssignees(task: Task, newAssigneeUids: string[]) {
     ...added.map((uid) => ({ type: "assigned" as const, uid, at: now })),
     ...removed.map((uid) => ({ type: "unassigned" as const, uid, at: now })),
   ];
+  if (coreUsesD1()) { await patchD1Task(task.id, { assigneeUids: newAssigneeUids, history: [...task.history, ...newEntries], updatedAt: now }); return; }
   await updateDoc(doc(db, "tasks", task.id), {
     assigneeUids: newAssigneeUids,
     history: [...task.history, ...newEntries],
@@ -228,6 +238,7 @@ export async function moveTaskStatus(task: Task, status: TaskStatus, tasks: Task
     status === "done"
       ? task.assigneeUids.map((uid) => ({ type: "completed" as const, uid, at: now }))
       : [];
+  if (coreUsesD1()) { await patchD1Task(task.id, { status, history: newEntries.length > 0 ? [...task.history, ...newEntries] : task.history, updatedAt: now }); return; }
   await updateDoc(doc(db, "tasks", task.id), {
     status,
     history: newEntries.length > 0 ? [...task.history, ...newEntries] : task.history,
@@ -237,6 +248,7 @@ export async function moveTaskStatus(task: Task, status: TaskStatus, tasks: Task
 
 export async function reorderTasks(updates: Array<{ id: string; status: TaskStatus; order: number }>) {
   if (updates.length === 0) return;
+  if (coreUsesD1()) { const now = new Date().toISOString(); await Promise.all(updates.map((update) => patchD1Task(update.id, { status: update.status, order: update.order, updatedAt: now }))); return; }
   const batch = writeBatch(db);
   const now = new Date().toISOString();
   updates.forEach((update) => {
@@ -251,6 +263,7 @@ export async function reorderTasks(updates: Array<{ id: string; status: TaskStat
 
 export async function archiveTask(taskId: string, actorUid: string) {
   const now = new Date().toISOString();
+  if (coreUsesD1()) { await patchD1Task(taskId, { archived: true, archivedAt: now, archivedByUid: actorUid, status: "done", updatedAt: now }); return; }
   await updateDoc(doc(db, "tasks", taskId), {
     archived: true,
     archivedAt: now,
@@ -261,6 +274,7 @@ export async function archiveTask(taskId: string, actorUid: string) {
 }
 
 export async function restoreTask(taskId: string) {
+  if (coreUsesD1()) { await patchD1Task(taskId, { archived: false, archivedAt: null, archivedByUid: null, status: "done", updatedAt: new Date().toISOString() }); return; }
   await updateDoc(doc(db, "tasks", taskId), {
     archived: false,
     archivedAt: null,

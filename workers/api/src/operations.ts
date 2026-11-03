@@ -14,7 +14,7 @@ export function isOperationsRoute(pathname: string) {
 export async function handleOperations(request: Request, env: OperationsEnv, uid: string, token: string, cors: Headers) {
   try {
     const url = new URL(request.url);
-    const profile = await fetchProfile(uid, token, env.FIREBASE_PROJECT_ID);
+    const profile = await fetchProfile(uid, token, env);
     if (url.pathname === "/migrations/operations") return migrateOperations(request, env, token, profile, cors);
     if (url.pathname === "/calendar-events" || url.pathname.startsWith("/calendar-events/")) return calendarRoute(request, env, uid, profile, cors);
     if (url.pathname === "/time-entries" || url.pathname.startsWith("/time-entries/")) return timeEntryRoute(request, env, uid, profile, cors);
@@ -198,8 +198,10 @@ async function migrateOperations(request: Request, env: OperationsEnv, token: st
   return json({ copied: { calendarEvents: calendar.length, timeEntries: entries.length, timeclockPins: pins.length }, verified: counts, deviceSessions: "migrate lazily as each device reconnects" }, 200, cors);
 }
 
-async function fetchProfile(uid: string, token: string, projectId: string): Promise<Profile> {
-  const response = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`, { headers: { Authorization: `Bearer ${token}` } });
+async function fetchProfile(uid: string, token: string, env: OperationsEnv): Promise<Profile> {
+  const row = await env.DB.prepare("SELECT role, subteam FROM users WHERE uid = ?").bind(uid).first<Profile>();
+  if (row) return row;
+  const response = await fetch(`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error("Forbidden");
   const doc = await response.json<FirestoreDocument>();
   return { role: doc.fields?.role?.stringValue ?? "", subteam: doc.fields?.subteam?.stringValue ?? null };

@@ -129,6 +129,14 @@ browser reconnects because the original Firestore rules intentionally allow
 users to read only their own device records. The D1-backed clients use short
 polling intervals plus immediate local refresh events after writes.
 
+Migration `0003_users_tasks.sql` completes the application-data cutover. User
+profiles, roles, subteams, certification assignments, and complete task JSON
+records are copied and verified together. D1 columns index the board fields
+used for filtering and ordering while the full task document preserves
+comments, prerequisites, history, links, archives, and attachment metadata.
+After the copy, Worker authorization reads roles and task assignments from D1;
+Firebase remains only the identity provider and rollback source.
+
 Apply future checked-in D1 migrations before deploying Worker code that needs
 them:
 

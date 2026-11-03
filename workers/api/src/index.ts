@@ -2,6 +2,7 @@
 
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { handleOperations, isOperationsRoute } from "./operations";
+import { handleCore, isCoreRoute } from "./core";
 
 interface Env {
   ATTACHMENTS: R2Bucket;
@@ -47,6 +48,16 @@ export default {
       return json({ ok: true }, 200, cors);
     }
 
+    if (isCoreRoute(url.pathname)) {
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        return handleCore(request, env, uid, token, cors);
+      } catch (error) {
+        return authenticatedError(error, cors, "Data request failed");
+      }
+    }
+
     if (isOperationsRoute(url.pathname)) {
       try {
         const token = bearerToken(request);
@@ -87,7 +98,7 @@ export default {
         const token = bearerToken(request);
         const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
         if (request.method === "GET" && !certificationMatch[1]) {
-          await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
+          if (!await fetchD1Profile(env.DB, uid)) throw new Error("Forbidden");
           const result = await env.DB.prepare("SELECT id, name, description, subteam FROM certifications ORDER BY name COLLATE NOCASE").all<CertificationRow>();
           return json(result.results, 200, cors);
         }
@@ -201,11 +212,8 @@ export default {
     try {
       const token = bearerToken(request);
       const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
-      const [task, profile] = await Promise.all([
-        fetchFirestoreDocument("tasks", taskId, token, env.FIREBASE_PROJECT_ID),
-        fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID),
-      ]);
-      if (!canChangeAttachments(uid, task, profile)) {
+      const [task, profile] = await Promise.all([fetchD1Task(env.DB, taskId), fetchD1Profile(env.DB, uid)]);
+      if (!task || !profile || !canChangeAttachments(uid, task, profile)) {
         return json({ error: "You cannot change attachments on this task" }, 403, cors);
       }
 
@@ -322,16 +330,27 @@ function parseFirestoreCertification(document: FirestoreDocument & { name?: stri
 }
 
 async function requireCoach(uid: string, token: string, env: Env) {
-  const profile = await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
-  if (profile.fields?.role?.stringValue !== "coach") throw new Error("Forbidden");
+  const profile = await fetchD1Profile(env.DB, uid);
+  if (profile) { if (profile.role !== "coach") throw new Error("Forbidden"); return; }
+  const fallback = await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
+  if (fallback.fields?.role?.stringValue !== "coach") throw new Error("Forbidden");
 }
 
-function canChangeAttachments(uid: string, task: FirestoreDocument, profile: FirestoreDocument) {
-  const role = profile.fields?.role?.stringValue;
-  const profileSubteam = profile.fields?.subteam?.stringValue;
-  const taskSubteam = task.fields?.subteam?.stringValue;
-  const assignees = task.fields?.assigneeUids?.arrayValue?.values?.flatMap((value) => value.stringValue ? [value.stringValue] : []) ?? [];
+function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUids?: string[] }, profile: { role?: string; subteam?: string | null }) {
+  const role = profile.role;
+  const profileSubteam = profile.subteam;
+  const taskSubteam = task.subteam;
+  const assignees = task.assigneeUids ?? [];
   return role === "coach" || (role === "student_leader" && profileSubteam === taskSubteam) || assignees.includes(uid);
+}
+
+async function fetchD1Task(db: D1Database, id: string) {
+  const row = await db.prepare("SELECT data FROM tasks WHERE id = ?").bind(id).first<{ data: string }>();
+  return row ? JSON.parse(row.data) as { subteam?: string; assigneeUids?: string[] } : null;
+}
+
+async function fetchD1Profile(db: D1Database, uid: string) {
+  return db.prepare("SELECT role, subteam FROM users WHERE uid = ?").bind(uid).first<{ role: string; subteam: string | null }>();
 }
 
 function validateAttachmentPath(taskId: string, attachmentId: string, fileName: string) {
