@@ -72,6 +72,9 @@ path is activated only when Cloudflare Pages receives
 using Firebase Storage. Existing attachment records without a provider remain
 treated as Firebase objects.
 
+The Worker permits the production origin, local development, and all branch
+previews under the assigned `ops-34l.pages.dev` Pages hostname.
+
 ### 3. Put a Worker API in front of application data
 
 Do not let the browser connect directly to D1. Add authenticated Worker routes

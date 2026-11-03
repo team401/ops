@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { EmailAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { AppShell } from "@/components/app-shell";
 import { ModalBackdrop } from "@/components/modal-backdrop";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { durationMs, formatDuration } from "@/components/personal-time-report";
 import { useAuth } from "@/context/auth-context";
 import { auth } from "@/lib/firebase";
@@ -32,6 +33,7 @@ export default function TimeclockPage() {
   const [kioskConfig, setKioskConfig] = useState<KioskConfig | null>(null);
   const [kioskChecked, setKioskChecked] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -66,7 +68,6 @@ export default function TimeclockPage() {
 
   async function signOutAll() {
     if (!profile || activeEntries.length === 0) return;
-    if (!confirm(`Sign out all ${activeEntries.length} people currently clocked in?`)) return;
     setActionError(null);
     try {
       await clockOutEveryone(activeEntries, actualProfile?.uid ?? profile.uid);
@@ -114,9 +115,10 @@ export default function TimeclockPage() {
           now={now}
           error={actionError}
           onSignOut={signOutOne}
-          onSignOutAll={signOutAll}
+          onSignOutAll={() => setConfirmSignOutAll(true)}
         />
       ) : null}
+      {confirmSignOutAll && <ConfirmDialog title="Sign everyone out?" description={`Sign out all ${activeEntries.length} people currently clocked in?`} confirmLabel="Sign everyone out" onConfirm={signOutAll} onClose={() => setConfirmSignOutAll(false)} />}
 
       {showKioskSetup && (
         <KioskSetup onClose={() => setShowKioskSetup(false)} onStart={startKiosk} />

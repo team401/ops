@@ -5,6 +5,7 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { AppShell } from "@/components/app-shell";
 import { ModalBackdrop } from "@/components/modal-backdrop";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/context/auth-context";
 import { useUsers, useCertifications, useTimeclockPins } from "@/lib/hooks";
 import { removeTimeclockPin, setTimeclockPin } from "@/lib/timeclock-actions";
@@ -491,6 +492,7 @@ function RosterRow({
   const [resetSent, setResetSent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"remove" | "reset" | null>(null);
 
   async function save() {
     setSaving(true);
@@ -519,13 +521,11 @@ function RosterRow({
   }
 
   async function remove() {
-    if (!confirm(`Remove ${user.displayName}'s access? This can't be undone here.`)) return;
     await removeTimeclockPin(user.uid);
     await deleteUserProfile(user.uid);
   }
 
   async function resetPassword() {
-    if (!confirm(`Send a password reset email to ${user.email}?`)) return;
     await sendPasswordResetEmail(auth, user.email);
     setResetSent(true);
     setTimeout(() => setResetSent(false), 4000);
@@ -533,7 +533,7 @@ function RosterRow({
 
   const actionButton = "text-xs tracked-label border rounded-sm px-2 py-1 transition-colors";
 
-  return (
+  return <>
     <tr className="border-b border-steel-line last:border-0">
       <td className="px-3 py-2">{user.displayName}</td>
       <td className="px-3 py-2 text-steel">{user.email}</td>
@@ -611,13 +611,13 @@ function RosterRow({
                 Edit
               </button>
               <button
-                onClick={resetPassword}
+                onClick={() => setConfirmAction("reset")}
                 className={`${actionButton} text-hazard border-hazard/50 hover:bg-hazard/10`}
               >
                 {resetSent ? "Sent" : "Reset pwd"}
               </button>
               <button
-                onClick={remove}
+                onClick={() => setConfirmAction("remove")}
                 className={`${actionButton} text-danger border-danger/50 hover:bg-danger/10`}
               >
                 Remove
@@ -627,7 +627,9 @@ function RosterRow({
         </div>
       </td>
     </tr>
-  );
+    {confirmAction === "remove" && <ConfirmDialog title="Remove account access?" description={`Remove ${user.displayName}'s Ops profile and timeclock PIN? This cannot be undone here.`} confirmLabel="Remove access" destructive onConfirm={remove} onClose={() => setConfirmAction(null)} />}
+    {confirmAction === "reset" && <ConfirmDialog title="Send password reset?" description={`Send a password reset email to ${user.email}?`} confirmLabel="Send reset email" onConfirm={resetPassword} onClose={() => setConfirmAction(null)} />}
+  </>;
 }
 
 function NewAccountDialog({
@@ -729,6 +731,7 @@ function CertificationsTab() {
   const { certifications } = useCertifications();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<import("@/types").Certification | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<import("@/types").Certification | null>(null);
 
   return (
     <div className="space-y-4">
@@ -749,11 +752,7 @@ function CertificationsTab() {
                   Edit
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm(`Delete "${c.name}"? Tasks requiring it will no longer be gated.`)) {
-                      deleteCertification(c.id);
-                    }
-                  }}
+                  onClick={() => setPendingDelete(c)}
                   className="text-danger text-xs tracked-label"
                 >
                   Delete
@@ -775,6 +774,7 @@ function CertificationsTab() {
       {editing && (
         <CertDialog mode="edit" certification={editing} onClose={() => setEditing(null)} />
       )}
+      {pendingDelete && <ConfirmDialog title="Delete certification?" description={`Delete “${pendingDelete.name}”? Tasks requiring it will no longer be gated.`} confirmLabel="Delete certification" destructive onConfirm={() => deleteCertification(pendingDelete.id)} onClose={() => setPendingDelete(null)} />}
     </div>
   );
 }

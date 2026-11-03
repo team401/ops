@@ -76,6 +76,7 @@ export function TaskDialog({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdWithAttachmentError, setCreatedWithAttachmentError] = useState(false);
 
   const canManageThisTask = task ? canManageSubteam(task.subteam) : true;
   const canDelete = mode === "edit" && task && canManageSubteam(task.subteam);
@@ -167,7 +168,8 @@ export function TaskDialog({
             pendingFiles.map((file) => uploadTaskAttachment(created.id, file, actualProfile?.uid ?? profile.uid))
           );
           if (results.some((result) => result.status === "rejected")) {
-            alert("The task was created, but at least one attachment could not be uploaded. You can add it again from the task details.");
+            setCreatedWithAttachmentError(true);
+            return;
           }
         }
       } else if (task) {
@@ -352,6 +354,16 @@ export function TaskDialog({
       setError("Could not remove that attachment.");
     }
   }
+
+  if (createdWithAttachmentError) return (
+    <ModalBackdrop onClose={onClose}>
+      <section role="dialog" aria-modal="true" aria-labelledby="attachment-warning-title" className="w-full max-w-sm rounded-lg border border-steel-line bg-paper-raised p-5 shadow-xl">
+        <h2 id="attachment-warning-title" className="text-lg font-semibold">Task created</h2>
+        <p className="mt-2 text-sm text-steel">At least one attachment could not be uploaded. Open the new task and add the file again.</p>
+        <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="btn-primary">Close</button></div>
+      </section>
+    </ModalBackdrop>
+  );
 
   return (
     <>
