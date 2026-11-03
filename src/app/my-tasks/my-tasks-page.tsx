@@ -27,7 +27,7 @@ export default function MyTasksPage() {
   const [search, setSearch] = useState("");
 
   const myTasks = useMemo(
-    () => tasks.filter((task) => profile && task.assigneeUids.includes(profile.uid) && taskMatchesSearch(task, users, search)),
+    () => tasks.filter((task) => profile && task.assigneeUids.includes(profile.uid) && (!task.archived || Boolean(search.trim())) && taskMatchesSearch(task, users, search)),
     [tasks, profile, users, search]
   );
 

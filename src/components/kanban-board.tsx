@@ -48,7 +48,9 @@ export function KanbanBoard({
   );
 
   const scopedTasks = useMemo(
-    () => (subteam ? tasks.filter((t) => t.subteam === subteam) : tasks).filter((task) => taskMatchesSearch(task, users, search)),
+    () => (subteam ? tasks.filter((t) => t.subteam === subteam) : tasks)
+      .filter((task) => !task.archived || Boolean(search.trim()))
+      .filter((task) => taskMatchesSearch(task, users, search)),
     [tasks, subteam, users, search]
   );
 

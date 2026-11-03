@@ -10,6 +10,7 @@ export function taskMatchesSearch(task: Task, users: UserProfile[], rawQuery: st
     task.title,
     task.description,
     task.blockedDetails,
+    task.archived ? "archived" : "",
     ...assignees,
     ...(task.comments ?? []).map((comment) => comment.body),
     ...(task.links ?? []).flatMap((link) => [link.label, link.url]),
