@@ -52,6 +52,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <span className="tracked-label text-[10px] font-bold" style={{ color: `color-mix(in srgb, ${meta.color} 70%, var(--ink))` }}>{meta.label}</span>
               {task.leadersOnly && <span className="rounded-full bg-blueprint/12 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">Leaders only</span>}
+              {task.archived && <span className="rounded-full bg-hazard/15 px-1.5 py-0.5 text-[9px] font-bold text-hazard">Archived</span>}
             </div>
             <span className="rounded-full border border-steel-line bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold" style={{ color: PRIORITY_MARK[task.priority].color }}>{PRIORITY_MARK[task.priority].label}</span>
           </div>

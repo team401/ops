@@ -246,7 +246,7 @@ export default function CalendarPage() {
         </div>
         </div>
       ) : (
-        <GanttView tasks={tasks} onOpenTask={setOpenTask} />
+        <GanttView tasks={tasks.filter((task) => !task.archived)} onOpenTask={setOpenTask} />
       )}
 
       {openTask && (

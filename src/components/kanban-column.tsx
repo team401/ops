@@ -51,7 +51,7 @@ export function KanbanColumn({
           <div className="space-y-1.5">
             {tasks.map((task) => (
               <TaskCard key={task.id} task={task} tasks={allTasks} certifications={certifications} users={users}
-                draggable={draggable} defaultCollapsed={shouldCollapseCard(task)} onOpen={() => onOpenTask(task)} />
+                draggable={draggable && !task.archived} defaultCollapsed={shouldCollapseCard(task)} onOpen={() => onOpenTask(task)} />
             ))}
           </div>
         </SortableContext>
