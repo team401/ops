@@ -2,7 +2,6 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ChevronDown } from "lucide-react";
 import type { Task, TaskStatus, Certification, UserProfile } from "@/types";
 import { TaskCard } from "@/components/task-card";
 
@@ -35,13 +34,16 @@ export function KanbanColumn({
 
   return (
     <div className="flex w-full flex-col xl:h-[calc(100dvh-10rem)] xl:min-h-[360px] xl:min-w-[240px] xl:flex-1 xl:shrink-0">
-      <div className="sticky top-0 z-20 mb-1 flex items-center gap-2 bg-paper/95 px-1 py-1.5 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        className="sticky top-0 z-20 mb-1 flex w-full items-center gap-2 rounded-md bg-paper/95 px-2 py-2 text-left backdrop-blur-sm hover:bg-blueprint/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blueprint md:pointer-events-none md:px-1 md:py-1.5 md:hover:bg-paper/95"
+        aria-label={`${collapsed ? "Expand" : "Collapse"} ${meta.label}`}
+        aria-expanded={!collapsed}
+      >
         <h3 className="tracked-label text-xs font-bold">{meta.label}</h3>
-        <span className="text-[10px] text-steel ml-auto">{tasks.length}</span>
-        <button type="button" onClick={onToggleCollapsed} className="rounded p-1 text-steel md:hidden" aria-label={`${collapsed ? "Expand" : "Collapse"} ${meta.label}`} aria-expanded={!collapsed}>
-          <ChevronDown size={16} className={`transition-transform ${collapsed ? "-rotate-90" : ""}`} />
-        </button>
-      </div>
+        <span className="ml-auto text-[10px] text-steel">{tasks.length}</span>
+      </button>
       <div
         ref={setNodeRef}
         className={`${collapsed ? "hidden md:block" : "block"} min-h-[120px] flex-1 rounded-lg border border-dashed p-1.5 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver ? "border-blueprint bg-blueprint/5" : "border-steel-line/60"

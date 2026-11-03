@@ -64,7 +64,12 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const storagePath = `task-attachments/${taskId}/${id}/${safeName}`;
   const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, file, { contentType: file.type || "application/octet-stream" });
+  await uploadBytes(storageRef, file, {
+    contentType: file.type || "application/octet-stream",
+    // Attachment paths contain a UUID, so a changed file always gets a new URL.
+    // Browsers and CDNs can therefore cache the bytes without serving stale images.
+    cacheControl: "public,max-age=31536000,immutable",
+  });
   const attachment: TaskAttachment = {
     id,
     name: file.name,
