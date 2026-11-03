@@ -77,6 +77,12 @@ export interface TaskAttachment {
   createdAt: string;
 }
 
+export interface TaskLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -95,6 +101,8 @@ export interface Task {
   prerequisiteTaskIds: string[];
   comments: TaskComment[];
   attachments: TaskAttachment[];
+  links: TaskLink[];
+  order: number;
   createdAt: string;
   updatedAt: string;
   dueDate: string | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, FormEvent, ChangeEvent, DragEvent } from "react";
-import type { Task, Subteam, Priority, Certification, UserProfile, TaskStatus, BlockedReason, TaskAttachment } from "@/types";
+import type { Task, Subteam, Priority, Certification, UserProfile, TaskStatus, BlockedReason, TaskAttachment, TaskLink } from "@/types";
 import { TASK_STATUSES } from "@/types";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { createTask, updateTask, deleteTask, leaveTask, setAssignees, moveTaskStatus, addTaskComment, uploadTaskAttachment, removeTaskAttachment, incompletePrerequisites } from "@/lib/task-actions";
@@ -66,6 +66,7 @@ export function TaskDialog({
   const [comments, setComments] = useState(task?.comments ?? []);
   const [commentBody, setCommentBody] = useState("");
   const [attachments, setAttachments] = useState(task?.attachments ?? []);
+  const [links, setLinks] = useState<TaskLink[]>(task?.links ?? []);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -152,6 +153,8 @@ export function TaskDialog({
           prerequisiteTaskIds,
           comments: [],
           attachments: [],
+          links,
+          order: Date.now(),
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
           assigneeUids,
         });
@@ -177,6 +180,7 @@ export function TaskDialog({
           blockedReason: blockedReason || null,
           blockedDetails,
           prerequisiteTaskIds,
+          links,
         });
         const changed =
           assigneeUids.length !== task.assigneeUids.length ||
@@ -235,6 +239,14 @@ export function TaskDialog({
     setPrerequisiteTaskIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
     );
+  }
+
+  function addLink() {
+    setLinks((current) => [...current, { id: crypto.randomUUID(), label: "", url: "" }]);
+  }
+
+  function changeLink(id: string, changes: Partial<TaskLink>) {
+    setLinks((current) => current.map((link) => link.id === id ? { ...link, ...changes } : link));
   }
 
   async function handleAddComment() {
@@ -467,7 +479,7 @@ export function TaskDialog({
           />
         </label>
 
-        {(!readOnly || leadersOnly) && (
+        {(!readOnly || leadersOnly) && (profile?.role === "coach" || profile?.role === "student_leader") && (
           <label className="flex items-start gap-3 rounded border border-steel-line bg-surface p-3">
             <input
               type="checkbox"
@@ -485,6 +497,9 @@ export function TaskDialog({
           </label>
         )}
 
+        <details className="task-dialog-section" open={mode === "create"}>
+          <summary>Assignment &amp; requirements</summary>
+          <div className="mt-3 space-y-4">
         {!readOnly && (
           <div>
             <span className="tracked-label text-xs text-steel">Assignees</span>
@@ -593,7 +608,26 @@ export function TaskDialog({
             </p>
           )}
         </div>
+          </div>
+        </details>
 
+        <details className="task-dialog-section" open={mode === "create" || links.length > 0}>
+          <summary>Links ({links.length})</summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-steel">The first link is shown on the task card. Put the most useful CAD or reference link first.</p>
+            {links.map((link, index) => (
+              <div key={link.id} className="grid gap-2 rounded-lg border border-steel-line bg-surface p-2.5 sm:grid-cols-[1fr_1.6fr_auto]">
+                <input className="input" value={link.label} onChange={(event) => changeLink(link.id, { label: event.target.value })} placeholder={index === 0 ? "Primary link label" : "Link label"} disabled={readOnly} />
+                <input type="url" className="input" value={link.url} onChange={(event) => changeLink(link.id, { url: event.target.value })} placeholder="https://…" required disabled={readOnly} />
+                {readOnly ? <a href={link.url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-center text-xs">Open</a> : <button type="button" onClick={() => setLinks((current) => current.filter((item) => item.id !== link.id))} className="text-xs text-danger">Remove</button>}
+              </div>
+            ))}
+            {!readOnly && <button type="button" onClick={addLink} className="btn-secondary text-xs">+ Add link</button>}
+          </div>
+        </details>
+
+        <details className="task-dialog-section" open={mode === "create" || attachments.length > 0}>
+          <summary>Attachments ({attachments.length + pendingFiles.length})</summary>
         <div
           className={`border rounded p-3 transition-colors ${dragActive
             ? "border-blueprint bg-blueprint/10"
@@ -605,7 +639,7 @@ export function TaskDialog({
           onDrop={handleDrop}
         >
           <div className="flex items-center justify-between gap-3">
-            <span className="tracked-label text-xs text-steel">Attachments ({attachments.length + pendingFiles.length})</span>
+            <span className="text-xs text-steel">Images and files up to 20 MB each</span>
             {canAttach && (
               <label className="btn-secondary text-xs cursor-pointer">
                 {uploading ? "Uploading…" : "Add files"}
@@ -654,6 +688,7 @@ export function TaskDialog({
             </div>
           )}
         </div>
+        </details>
 
         {task && (
           <div className="border-t border-steel-line pt-4">
@@ -693,6 +728,11 @@ export function TaskDialog({
           {!readOnly && (
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Saving…" : mode === "create" ? "Create task" : "Save changes"}
+            </button>
+          )}
+          {hasStatusControl && status !== "review" && status !== "done" && (
+            <button type="button" onClick={() => handleStatusChange("review")} disabled={changingStatus} className="btn-primary">
+              {changingStatus ? "Moving…" : "Done — send to review"}
             </button>
           )}
           {isOnThisTask && (

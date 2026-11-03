@@ -11,6 +11,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut, User } from "firebase/a
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { UserProfile, Subteam } from "@/types";
+import { registerDeviceSession, removeCurrentDeviceSession, watchDeviceRevocation } from "@/lib/device-sessions";
 
 interface AuthContextValue {
   firebaseUser: User | null;
@@ -58,6 +59,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsub;
   }, [firebaseUser]);
 
+  useEffect(() => {
+    if (!firebaseUser) return;
+    let unsubscribe = () => {};
+    let cancelled = false;
+    registerDeviceSession(firebaseUser.uid).then((deviceId) => {
+      if (cancelled) return;
+      unsubscribe = watchDeviceRevocation(firebaseUser.uid, deviceId, () => firebaseSignOut(auth));
+    }).catch(() => undefined);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [firebaseUser]);
+
   const isCoach = profile?.role === "coach";
   const isStudentLeader = profile?.role === "student_leader";
 
@@ -67,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    if (firebaseUser) await removeCurrentDeviceSession(firebaseUser.uid);
     await firebaseSignOut(auth);
   }
 
