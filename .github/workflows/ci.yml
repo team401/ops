@@ -19,6 +19,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm run worker:check
+      - name: Bundle Cloudflare Worker
+        run: npm exec wrangler deploy -- --dry-run
       - name: Build static export
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}

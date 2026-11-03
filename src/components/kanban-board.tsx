@@ -37,6 +37,7 @@ export function KanbanBoard({
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
+  const [dragError, setDragError] = useState<string | null>(null);
   const cardDefault = useSyncExternalStore(subscribeCardDefault, getCardDefault, () => "collapsed");
   const [collapsedColumns, setCollapsedColumns] = useState<Set<TaskStatus>>(new Set());
   // Mouse: drag starts after a small movement, same as before. Touch: drag
@@ -92,7 +93,7 @@ export function KanbanBoard({
       }
       await reorderTasks(updates);
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Could not move that task.");
+      setDragError(caught instanceof Error ? caught.message : "Could not move that task.");
     }
   }
 
@@ -115,6 +116,7 @@ export function KanbanBoard({
           </button>
         )}
       </div>
+      {dragError && <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"><span>{dragError}</span><button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold">Dismiss</button></div>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 gap-2 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto">

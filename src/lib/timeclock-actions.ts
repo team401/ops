@@ -12,9 +12,11 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { TimeclockActivity, TimeclockPin, TimeEntry } from "@/types";
+import { clockOutD1Entries, clockOutD1Entry, createD1TimeEntry, deleteD1Pin, fetchTimeclockPins, lookupD1Pin, operationsUseD1, setD1Pin } from "@/lib/operations-api";
 
 export async function setTimeclockPin(uid: string, pin: string) {
   if (!/^\d{1,3}$/.test(pin)) throw new Error("PINs must be 1–3 digits.");
+  if (operationsUseD1()) return setD1Pin(uid, pin);
   const existing = await getDocs(query(collection(db, "timeclockPins"), where("pin", "==", pin), limit(1)));
   if (!existing.empty && existing.docs[0].id !== uid) throw new Error("That PIN is already in use.");
 
@@ -23,8 +25,9 @@ export async function setTimeclockPin(uid: string, pin: string) {
 }
 
 export async function assignAvailableTimeclockPin(uid: string) {
-  const snapshot = await getDocs(collection(db, "timeclockPins"));
-  const usedPins = new Set(snapshot.docs.map((pin) => (pin.data() as TimeclockPin).pin));
+  const usedPins = operationsUseD1()
+    ? new Set((await fetchTimeclockPins()).map((pin) => pin.pin))
+    : new Set((await getDocs(collection(db, "timeclockPins"))).docs.map((pin) => (pin.data() as TimeclockPin).pin));
   const randomStart = crypto.getRandomValues(new Uint16Array(1))[0] % 999;
 
   // Scan the full 1–999 range from a random starting point. Calling
@@ -45,10 +48,12 @@ export async function assignAvailableTimeclockPin(uid: string) {
 }
 
 export async function removeTimeclockPin(uid: string) {
+  if (operationsUseD1()) return deleteD1Pin(uid);
   await deleteDoc(doc(db, "timeclockPins", uid));
 }
 
 export async function findUidByPin(pin: string) {
+  if (operationsUseD1()) return lookupD1Pin(pin);
   const result = await getDocs(query(collection(db, "timeclockPins"), where("pin", "==", pin), limit(1)));
   return result.empty ? null : (result.docs[0].data() as TimeclockPin).uid;
 }
@@ -59,6 +64,7 @@ export async function clockInUser(
   activityName: string,
   coachUid: string
 ) {
+  if (operationsUseD1()) return createD1TimeEntry(uid, activity, activityName);
   const openEntries = await getDocs(
     query(collection(db, "timeEntries"), where("uid", "==", uid), where("clockOut", "==", null), limit(1))
   );
@@ -80,6 +86,7 @@ export async function clockInUser(
 }
 
 export async function clockOutEntry(entryId: string, coachUid: string) {
+  if (operationsUseD1()) return clockOutD1Entry(entryId);
   await updateDoc(doc(db, "timeEntries", entryId), {
     clockOut: new Date().toISOString(),
     clockedOutByUid: coachUid,
@@ -87,6 +94,7 @@ export async function clockOutEntry(entryId: string, coachUid: string) {
 }
 
 export async function clockOutEveryone(entries: TimeEntry[], coachUid: string) {
+  if (operationsUseD1()) return clockOutD1Entries(entries.map((entry) => entry.id));
   const now = new Date().toISOString();
   for (let start = 0; start < entries.length; start += 500) {
     const batch = writeBatch(db);

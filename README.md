@@ -93,6 +93,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
 NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org
 ```
 
 These values identify the Firebase web app and are safe to include in a client build. Firebase security rules, not secrecy of these values, protect application data.
@@ -161,7 +162,36 @@ The app currently uses these top-level collections:
 - `timeclockPins` — coach-only kiosk PIN records kept separate from public profiles
 - `timeEntries` — shop and outreach attendance sessions
 
-Uploaded task files are stored under `task-attachments/{taskId}/...` in Firebase Storage.
+Uploaded task files are stored under `task-attachments/{taskId}/...`. When
+`NEXT_PUBLIC_OPS_API_URL` is configured, new files go to the
+`team401-ops-attachments` R2 bucket through the authenticated Ops Worker.
+Existing Firebase Storage attachments continue to work during migration.
+Coaches can inventory and migrate them from **Admin > Data migration**.
+Scanning is read-only; migration verifies each R2 copy before updating its task
+record and does not delete the Firebase original.
+
+The certification catalog is the first Firestore domain moving to the shared
+`team401-ops` D1 database. Apply its schema before deploying the Worker:
+
+```bash
+npm run d1:migrate
+npm run worker:deploy
+```
+
+Then a coach can copy and verify the existing catalog from **Admin > Data
+migration**. Firestore certification records remain available for rollback.
+
+The next checked-in migration batches calendar events, attendance entries,
+timeclock PINs, and signed-in device sessions. Run **Copy operational data to
+D1** once from the same Admin tab; device sessions move automatically as each
+browser reconnects. Firestore records are retained throughout the rollback
+window.
+
+The final `0003_users_tasks.sql` migration moves user profiles and complete
+task records together. Run **Copy users and tasks to D1** from Admin after the
+preview deploys. Once verified, normal application data and authorization use
+D1; Firebase remains the authentication provider and an undeleted rollback
+snapshot.
 
 ## Timeclock and kiosk security
 
@@ -169,20 +199,33 @@ Only a coach can launch the kiosk. Kiosk PINs identify which team member is cloc
 
 The kiosk runs inside the authenticated coach session, so exiting kiosk mode requires the current coach's password. While kiosk mode is active, a root-level guard blocks other app routes and replaces Back/Forward navigation with the locked timeclock. A safe-sign-out option is also available and returns the device to the login screen. Firestore rules restrict all time-entry writes and PIN reads to coaches.
 
-## Deploying to GitHub Pages
+## Deploying to Cloudflare Pages
 
-The project is configured for static export and includes `.github/workflows/deploy.yml`. Pushes to `main` build and deploy the `out/` directory.
+The project is a static Next.js export connected to Cloudflare Pages through
+its GitHub integration. Cloudflare builds `main` as production and publishes it
+at `https://ops.team401.org/`. The `staging` branch and pull requests receive
+separate `pages.dev` preview deployments. Production and staging use the same
+Firebase project and therefore the same accounts and data; staging is only a
+UI/code preview.
 
-Add each `NEXT_PUBLIC_FIREBASE_*` value listed above as a GitHub Actions repository secret, then configure **Settings → Pages** to use **GitHub Actions** as the deployment source.
+Configure the Pages project with `npm run build`, output directory `out`, and
+all `NEXT_PUBLIC_FIREBASE_*` environment variables listed above. No base path is
+used because production and each Cloudflare branch preview are served from the
+root of their respective hostnames.
 
-The production site is published at `https://ops.team401.org/`. The app is
-built without a base path because the custom domain serves it from the domain
-root. In **Settings → Pages**, keep **GitHub Actions** as the deployment source
-and `ops.team401.org` as the custom domain.
+## Deploying the attachment Worker
 
-The `staging` branch is published alongside production at
-`https://ops.team401.org/staging/`. Both builds use the same Firebase project
-and therefore the same accounts and data; staging is only a UI/code preview.
+`wrangler.jsonc` defines the `team401-ops-api` Worker, its
+`team401-ops-attachments` R2 binding, and the `api.ops.team401.org` custom
+domain. The Worker verifies Firebase ID tokens and checks Firestore task and
+profile permissions before allowing uploads or deletions.
+
+Run `npm run worker:check` and `npm exec wrangler deploy -- --dry-run` before
+deployment. Deploy with `npm run worker:deploy`, then add
+`NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org` to both production and
+preview variables in Cloudflare Pages. Until that variable is present, uploads
+deliberately continue using Firebase Storage.
+
 Renovate targets `staging` and automatically merges routine non-major updates
 only after the install, lint, and production-build checks pass. Major updates
 remain manual because a green build cannot prove runtime compatibility. Promote
@@ -192,6 +235,6 @@ Automation must not merge that promotion PR.
 ## Operational notes
 
 - Removing someone from the Admin roster deletes their Firestore profile but not their Firebase Authentication record. Delete the Authentication user from the Firebase console when access must be fully revoked.
-- Changes to `firestore.rules` or `storage.rules` are not applied by the GitHub Pages deployment. Deploy Firebase rules separately.
+- Changes to `firestore.rules` or `storage.rules` are not applied by the Cloudflare Pages deployment. Deploy Firebase rules separately.
 - Provisioning and using Firebase Storage requires the Firebase project to use the Blaze plan, even when usage remains within no-cost quotas.
 - Unknown routes redirect to the app home page, which then sends authenticated users to the board and signed-out users to login.
