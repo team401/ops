@@ -61,8 +61,8 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
       </div>
       <div className="px-2.5 pb-2.5">
         {(task.status === "blocked" || incomplete.length > 0) && <div className="mb-1.5 rounded-md border border-hazard/35 bg-hazard/10 px-2 py-1.5 text-xs">{incomplete.length > 0 ? `Waiting on ${incomplete.map((item) => item.title).join(", ")}` : `${task.blockedReason ? BLOCKED_REASON_LABEL[task.blockedReason] : "Stuck"}${task.blockedDetails ? ` — ${task.blockedDetails}` : ""}`}</div>}
-        {firstLink && <a href={firstLink.url} target="_blank" rel="noopener noreferrer" onPointerDown={(event) => event.stopPropagation()} className="mb-1.5 flex items-center gap-1.5 rounded-md border border-blueprint/20 bg-blueprint/8 px-2 py-1.5 text-xs font-medium text-blueprint hover:bg-blueprint/15"><ExternalLink size={12} /><span className="truncate">{firstLink.label || firstLink.url}</span></a>}
         {!collapsed && <>
+          {firstLink && <a href={firstLink.url} target="_blank" rel="noopener noreferrer" onPointerDown={(event) => event.stopPropagation()} className="mb-1.5 flex items-center gap-1.5 rounded-md border border-blueprint/20 bg-blueprint/8 px-2 py-1.5 text-xs font-medium text-blueprint hover:bg-blueprint/15"><ExternalLink size={12} /><span className="truncate">{firstLink.label || firstLink.url}</span></a>}
           {task.description && <p className="mb-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/85">{task.description}</p>}
           {imageAttachments.length > 0 && <div className={`mb-1.5 grid gap-1.5 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>{imageAttachments.map((attachment) => (
             // eslint-disable-next-line @next/next/no-img-element
