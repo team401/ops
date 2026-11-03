@@ -37,26 +37,18 @@ will still call Firebase directly.
 Cloudflare documentation:
 https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-nextjs-site/
 
-The repository includes a disabled-by-default Cloudflare Pages workflow. To
-activate parallel deployments without disturbing the current GitHub Pages site:
-
-1. Create a Direct Upload Pages project named `team401-ops` with `main` as its
-   production branch. Do not attach `ops.team401.org` yet.
-2. Add GitHub Actions secrets `CLOUDFLARE_ACCOUNT_ID` and
-   `CLOUDFLARE_API_TOKEN`. The token needs Account / Cloudflare Pages / Edit.
-3. Add the repository variable `CLOUDFLARE_PAGES_PROJECT=team401-ops`.
-4. Add the repository variable `CLOUDFLARE_PAGES_ENABLED=true`.
-5. Verify the `main`, `staging`, and feature-branch `pages.dev` deployments.
-6. Attach `ops.team401.org` only after the production deployment is verified.
-7. Disable the old GitHub Pages deployment after DNS cutover and rollback
-   testing are complete.
+The Pages project uses Cloudflare's GitHub integration. It builds `main` as
+production and provides branch/PR preview deployments automatically. Verify the
+`main`, `staging`, and feature-branch `pages.dev` deployments before attaching
+`ops.team401.org`. Disable the old GitHub Pages deployment only after DNS
+cutover and rollback testing are complete.
 
 The Cloudflare build intentionally omits `NEXT_PUBLIC_BASE_PATH`: every Pages
 branch is served at the root of its own branch hostname rather than under the
 GitHub Pages `/staging` path.
 
-Direct Upload CI documentation:
-https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/
+Git integration documentation:
+https://developers.cloudflare.com/pages/configuration/git-integration/
 
 ### 2. Move attachments to R2
 
