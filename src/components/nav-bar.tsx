@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ExternalLink, Menu, X } from "lucide-react";
+import { ChevronDown, ExternalLink, Menu, UserRound, X } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -17,6 +17,7 @@ export function NavBar() {
   const { profile, isCoach, signOut } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -43,7 +44,6 @@ export function NavBar() {
     { href: "/inventory", label: "Inventory" },
     { href: "/certifications", label: "Certifications" },
     ...(isCoach ? [{ href: "/metrics", label: "Metrics" }] : []),
-    { href: "/reports", label: "Reports" },
     ...(isCoach ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
@@ -111,20 +111,23 @@ export function NavBar() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
+        <div className="relative ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
           <ThemeToggle />
-          <span className="hidden max-w-56 truncate text-sm text-white/85 sm:inline xl:hidden 2xl:inline">
-            {profile.displayName}
-            <span className="tracked-label ml-2 text-[10px] text-orange-200">
-              {profile.role.replace("_", " ")}
-            </span>
-          </span>
           <button
-            onClick={() => signOut()}
-            className="rounded border border-white/30 bg-transparent px-2 py-1 text-xs font-medium text-white hover:border-white/60 hover:bg-white/10"
+            type="button"
+            onClick={() => setAccountOpen((value) => !value)}
+            className="flex min-h-9 items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-2.5 text-xs font-medium text-white hover:bg-white/15"
+            aria-expanded={accountOpen}
+            aria-haspopup="menu"
           >
-            Sign out
+            <UserRound size={15} /><span className="hidden max-w-40 truncate sm:inline">{profile.displayName}</span><ChevronDown size={13} />
           </button>
+          {accountOpen && <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-52 rounded-lg border border-steel-line bg-paper-raised p-1.5 text-ink shadow-xl">
+            <p className="px-2 py-1.5 text-xs text-steel">{profile.role.replace("_", " ")}</p>
+            <Link role="menuitem" href="/account" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Account &amp; settings</Link>
+            <Link role="menuitem" href="/reports" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Reports</Link>
+            <button role="menuitem" type="button" onClick={() => signOut()} className="w-full rounded-md px-2 py-2 text-left text-sm text-danger hover:bg-danger/10">Sign out</button>
+          </div>}
         </div>
       </div>
 
@@ -171,6 +174,8 @@ export function NavBar() {
               </Link>
             );
           })}
+            <Link href="/account" onClick={() => setMobileOpen(false)} className="tracked-label rounded px-3 py-2.5 text-xs text-white/80 hover:bg-white/10">Account &amp; settings</Link>
+            <Link href="/reports" onClick={() => setMobileOpen(false)} className="tracked-label rounded px-3 py-2.5 text-xs text-white/80 hover:bg-white/10">Reports</Link>
           </div>
         </nav>
       )}

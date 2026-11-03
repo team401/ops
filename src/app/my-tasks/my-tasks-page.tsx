@@ -7,6 +7,8 @@ import { useTasks, useUsers, useCertifications } from "@/lib/hooks";
 import { TaskCard } from "@/components/task-card";
 import { TaskDialog } from "@/components/task-dialog";
 import type { Task } from "@/types";
+import { Search } from "lucide-react";
+import { taskMatchesSearch } from "@/lib/task-search";
 
 const STATUS_LABEL: Record<string, string> = {
   backlog: "Backlog",
@@ -22,22 +24,12 @@ export default function MyTasksPage() {
   const { users } = useUsers();
   const { certifications } = useCertifications();
   const [openTask, setOpenTask] = useState<Task | null>(null);
+  const [search, setSearch] = useState("");
 
   const myTasks = useMemo(
-    () => tasks.filter((t) => profile && t.assigneeUids.includes(profile.uid)),
-    [tasks, profile]
+    () => tasks.filter((task) => profile && task.assigneeUids.includes(profile.uid) && taskMatchesSearch(task, users, search)),
+    [tasks, profile, users, search]
   );
-
-  const eligibleOpenTasks = useMemo(() => {
-    if (!profile) return [];
-    return tasks.filter((t) => {
-      if (t.assigneeUids.length > 0) return false;
-      if (t.requiredCertificationIds.length === 0) return true;
-      return t.requireAllCertifications
-        ? t.requiredCertificationIds.every((id) => profile.certificationIds.includes(id))
-        : t.requiredCertificationIds.some((id) => profile.certificationIds.includes(id));
-    });
-  }, [tasks, profile]);
 
   if (!profile) return null;
 
@@ -47,6 +39,10 @@ export default function MyTasksPage() {
         <h1 className="text-lg font-semibold">My tasks</h1>
         <p className="text-sm text-steel">What you&apos;re working on, and what&apos;s ready for you to pick up.</p>
       </div>
+      <label className="relative mb-4 block max-w-sm">
+        <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-steel" />
+        <input type="search" className="input input-with-icon" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search my tasks…" aria-label="Search my tasks" />
+      </label>
 
       <section className="mb-8">
         <h2 className="tracked-label text-xs text-steel mb-2">
@@ -54,7 +50,7 @@ export default function MyTasksPage() {
         </h2>
         {myTasks.length === 0 ? (
           <p className="text-sm text-steel">
-            Nothing claimed yet — check the list below for tasks you&apos;re certified for.
+            {search ? "No assigned tasks match your search." : "Nothing claimed yet."}
           </p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -72,32 +68,6 @@ export default function MyTasksPage() {
                   {STATUS_LABEL[t.status]}
                 </p>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2 className="tracked-label text-xs text-steel mb-2">
-          Ready to claim ({eligibleOpenTasks.length})
-        </h2>
-        {eligibleOpenTasks.length === 0 ? (
-          <p className="text-sm text-steel">
-            No open tasks match your certifications right now — check back later or ask a coach
-            about earning a new one.
-          </p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {eligibleOpenTasks.map((t) => (
-              <TaskCard
-                key={t.id}
-                task={t}
-                tasks={tasks}
-                certifications={certifications}
-                users={users}
-                draggable={false}
-                onOpen={() => setOpenTask(t)}
-              />
             ))}
           </div>
         )}

@@ -6,6 +6,7 @@ import {
   deleteDoc,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -166,4 +167,18 @@ export async function moveTaskStatus(task: Task, status: TaskStatus, tasks: Task
     history: newEntries.length > 0 ? [...task.history, ...newEntries] : task.history,
     updatedAt: now,
   });
+}
+
+export async function reorderTasks(updates: Array<{ id: string; status: TaskStatus; order: number }>) {
+  if (updates.length === 0) return;
+  const batch = writeBatch(db);
+  const now = new Date().toISOString();
+  updates.forEach((update) => {
+    batch.update(doc(db, "tasks", update.id), {
+      status: update.status,
+      order: update.order,
+      updatedAt: now,
+    });
+  });
+  await batch.commit();
 }

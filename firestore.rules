@@ -57,6 +57,10 @@ service cloud.firestore {
       allow delete: if isCoach();
     }
 
+    match /userSessions/{uid}/devices/{deviceId} {
+      allow read, create, update, delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // --- certifications ---
     match /certifications/{certId} {
       allow read: if isSignedIn();
@@ -88,8 +92,10 @@ service cloud.firestore {
         && (resource.data.leadersOnly == false || isCoach() || isStudentLeader());
 
       allow create: if isSignedIn()
-        && canManageSubteam(request.resource.data.subteam)
-        && request.resource.data.leadersOnly is bool;
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.subteam in ['mechanical', 'electrical', 'programming', 'cad', 'outreach', 'finance']
+        && request.resource.data.leadersOnly is bool
+        && (request.resource.data.leadersOnly == false || isCoach() || isStudentLeader());
 
       allow delete: if isSignedIn() && canManageSubteam(resource.data.subteam);
 
@@ -130,9 +136,9 @@ service cloud.firestore {
             // Any signed-in team member may move a card. Dragging is still a
             // narrowly scoped status operation and cannot change task details.
             (
-              request.resource.data.status != resource.data.status &&
+              (request.resource.data.status != resource.data.status || request.resource.data.get('order', 0) != resource.data.get('order', 0)) &&
               request.resource.data.status in ['backlog', 'in_progress', 'blocked', 'review', 'done'] &&
-              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'history'])
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'order', 'updatedAt', 'history'])
             )
             ||
             // Any signed-in team member may append an update under their own

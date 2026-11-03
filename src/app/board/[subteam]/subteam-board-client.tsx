@@ -2,13 +2,11 @@
 
 import { AppShell } from "@/components/app-shell";
 import { KanbanBoard } from "@/components/kanban-board";
-import { useAuth } from "@/context/auth-context";
 import { useTasks, useUsers, useCertifications } from "@/lib/hooks";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
-import type { Subteam } from "@/types";
+import { SUBTEAMS, type Subteam } from "@/types";
 
 export function SubteamBoardClient({ subteam }: { subteam: Subteam }) {
-  const { canManageSubteam } = useAuth();
   const { tasks } = useTasks();
   const { users } = useUsers();
   const { certifications } = useCertifications();
@@ -30,7 +28,7 @@ export function SubteamBoardClient({ subteam }: { subteam: Subteam }) {
         users={users}
         subteam={subteam}
         createDefaultSubteam={subteam}
-        editableSubteams={canManageSubteam(subteam) ? [subteam] : []}
+        editableSubteams={SUBTEAMS}
       />
     </AppShell>
   );
