@@ -29,7 +29,7 @@ export function CalendarEventDialog({
   canManage,
   onClose,
 }: CalendarEventDialogProps) {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
   const initialDate = event?.startDate ?? defaultDate ?? new Date().toISOString().slice(0, 10);
   const [title, setTitle] = useState(event?.title ?? "");
   const [category, setCategory] = useState<CalendarEventCategory>(event?.category ?? "other");
@@ -75,7 +75,7 @@ export function CalendarEventDialog({
         description: description.trim(),
       };
       if (mode === "create") {
-        await createCalendarEvent(values, profile.uid);
+        await createCalendarEvent(values, actualProfile?.uid ?? profile.uid);
       } else if (event) {
         await updateCalendarEvent(event.id, values);
       }
