@@ -55,7 +55,7 @@ const WIDTH_OPTIONS = ["9", "15"];
 const CHAIN_OPTIONS = ["#25", "#35"];
 
 export default function InventoryPage() {
-  const { firebaseUser, profile, isCoach } = useAuth();
+  const { firebaseUser, profile, actualProfile, isCoach } = useAuth();
   const { items, loading, error } = useInventory();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -94,7 +94,7 @@ export default function InventoryPage() {
   const filtersActive = category !== "all" || stock !== "all" || standard !== "all" || bore !== "all" || search !== "";
 
   const actor = firebaseUser && profile
-    ? { uid: firebaseUser.uid, name: profile.displayName }
+    ? { uid: firebaseUser.uid, name: actualProfile?.displayName ?? profile.displayName }
     : null;
 
   async function removeItem(item: InventoryItem) {

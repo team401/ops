@@ -46,7 +46,7 @@ export function TaskDialog({
   task,
   onClose,
 }: TaskDialogProps) {
-  const { profile, isCoach, canManageSubteam } = useAuth();
+  const { profile, actualProfile, isCoach, canManageSubteam } = useAuth();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [leadersOnly, setLeadersOnly] = useState(task?.leadersOnly ?? false);
@@ -146,8 +146,8 @@ export function TaskDialog({
           priority,
           requiredCertificationIds,
           requireAllCertifications: requireAll,
-          createdByUid: profile.uid,
-          pointOfContactUid: pointOfContactUid || profile.uid,
+          createdByUid: actualProfile?.uid ?? profile.uid,
+          pointOfContactUid: pointOfContactUid || actualProfile?.uid || profile.uid,
           blockedReason: blockedReason || null,
           blockedDetails,
           prerequisiteTaskIds,
@@ -160,7 +160,7 @@ export function TaskDialog({
         });
         if (pendingFiles.length > 0) {
           const results = await Promise.allSettled(
-            pendingFiles.map((file) => uploadTaskAttachment(created.id, file, profile.uid))
+            pendingFiles.map((file) => uploadTaskAttachment(created.id, file, actualProfile?.uid ?? profile.uid))
           );
           if (results.some((result) => result.status === "rejected")) {
             alert("The task was created, but at least one attachment could not be uploaded. You can add it again from the task details.");
@@ -213,7 +213,7 @@ export function TaskDialog({
 
   async function handleLeave() {
     if (!task || !profile) return;
-    await leaveTask(task.id, profile.uid);
+    await leaveTask(task.id, actualProfile?.uid ?? profile.uid);
     onClose();
   }
 
@@ -253,7 +253,7 @@ export function TaskDialog({
     if (!task || !profile || !commentBody.trim()) return;
     setError(null);
     try {
-      const comment = await addTaskComment(task.id, commentBody, profile.uid);
+      const comment = await addTaskComment(task.id, commentBody, actualProfile?.uid ?? profile.uid);
       setComments((current) => [...current, comment]);
       setCommentBody("");
     } catch {
@@ -274,7 +274,7 @@ export function TaskDialog({
     setUploading(true);
     setError(null);
     try {
-      const results = await Promise.allSettled(files.map((file) => uploadTaskAttachment(task.id, file, profile.uid)));
+      const results = await Promise.allSettled(files.map((file) => uploadTaskAttachment(task.id, file, actualProfile?.uid ?? profile.uid)));
       const uploaded = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       setAttachments((current) => [...current, ...uploaded]);
       if (results.some((result) => result.status === "rejected")) {

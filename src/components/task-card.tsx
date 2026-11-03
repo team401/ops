@@ -20,7 +20,7 @@ const BLOCKED_REASON_LABEL: Record<NonNullable<Task["blockedReason"]>, string> =
 export function TaskCard({ task, tasks, certifications, users, draggable, onOpen, defaultCollapsed = false }: {
   task: Task; tasks: Task[]; certifications: Certification[]; users: UserProfile[]; draggable: boolean; onOpen: () => void; defaultCollapsed?: boolean;
 }) {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
   const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
   const collapsed = collapsedOverride ?? defaultCollapsed;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !draggable, data: { status: task.status } });
@@ -73,7 +73,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
         </button>
         {!collapsed && <p className="mt-1 text-[11px] text-steel">POC: {contact?.displayName ?? "Task creator"}</p>}
       </div>
-      {canClaim && <button type="button" onClick={() => profile && claimTask(task.id, profile.uid)} className="w-full border-t border-success/30 bg-success/10 py-1.5 text-center text-[10px] font-bold hover:bg-success/20">Claim task</button>}
+      {canClaim && <button type="button" onClick={() => profile && claimTask(task.id, actualProfile?.uid ?? profile.uid)} className="w-full border-t border-success/30 bg-success/10 py-1.5 text-center text-[10px] font-bold hover:bg-success/20">Claim task</button>}
       {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && <div className="w-full border-t border-danger/30 bg-danger/10 py-1.5 text-center text-[10px] font-bold">Certification required</div>}
     </article>
   );

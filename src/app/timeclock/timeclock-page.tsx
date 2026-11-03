@@ -23,7 +23,7 @@ import {
 import type { TimeclockActivity, TimeEntry, UserProfile } from "@/types";
 
 export default function TimeclockPage() {
-  const { profile, isCoach } = useAuth();
+  const { profile, actualProfile, isCoach } = useAuth();
   const { users } = useUsers();
   const entryScope = profile && isCoach ? null : undefined;
   const { entries, loading } = useTimeEntries(entryScope);
@@ -58,7 +58,7 @@ export default function TimeclockPage() {
     if (!profile) return;
     setActionError(null);
     try {
-      await clockOutEntry(entry.id, profile.uid);
+      await clockOutEntry(entry.id, actualProfile?.uid ?? profile.uid);
     } catch {
       setActionError("That person could not be signed out. Refresh and try again.");
     }
@@ -69,7 +69,7 @@ export default function TimeclockPage() {
     if (!confirm(`Sign out all ${activeEntries.length} people currently clocked in?`)) return;
     setActionError(null);
     try {
-      await clockOutEveryone(activeEntries, profile.uid);
+      await clockOutEveryone(activeEntries, actualProfile?.uid ?? profile.uid);
     } catch {
       setActionError("Not everyone could be signed out. Refresh and try again.");
     }
