@@ -13,4 +13,4 @@ export const fetchTasks = () => request<Task[]>("/tasks");
 export async function createD1Task(task: Task) { const result = await request<Task>("/tasks", { method: "POST", body: JSON.stringify(task) }); changed("tasks"); return result; }
 export async function patchD1Task(id: string, changes: Partial<Task>) { const result = await request<Task>(`/tasks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(changes) }); changed("tasks"); return result; }
 export async function deleteD1Task(id: string) { await request<void>(`/tasks/${encodeURIComponent(id)}`, { method: "DELETE" }); changed("tasks"); }
-export const migrateCoreToD1 = () => request<{ copied: { users: number; tasks: number }; verified: { users: number; tasks: number } }>("/migrations/core", { method: "POST" });
+export async function migrateCoreToD1() { const result = await request<{ copied: { users: number; tasks: number }; verified: { users: number; tasks: number } }>("/migrations/core", { method: "POST" }); changed("users"); changed("tasks"); return result; }
