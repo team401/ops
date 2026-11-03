@@ -39,9 +39,9 @@ https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-
 
 The Pages project uses Cloudflare's GitHub integration. It builds `main` as
 production and provides branch/PR preview deployments automatically. Verify the
-`main`, `staging`, and feature-branch `pages.dev` deployments before attaching
-`ops.team401.org`. Disable the old GitHub Pages deployment only after DNS
-cutover and rollback testing are complete.
+`main`, `staging`, and feature-branch `pages.dev` deployments. The production
+domain `ops.team401.org` was cut over after validation, and the obsolete GitHub
+Pages deployment workflow was removed.
 
 The Cloudflare build intentionally omits `NEXT_PUBLIC_BASE_PATH`: every Pages
 branch is served at the root of its own branch hostname rather than under the
