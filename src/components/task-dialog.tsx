@@ -4,7 +4,7 @@ import { useState, useRef, FormEvent, ChangeEvent, DragEvent } from "react";
 import type { Task, Subteam, Priority, Certification, UserProfile, TaskStatus, BlockedReason, TaskAttachment, TaskLink } from "@/types";
 import { TASK_STATUSES } from "@/types";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
-import { createTask, updateTask, deleteTask, leaveTask, setAssignees, moveTaskStatus, addTaskComment, uploadTaskAttachment, removeTaskAttachment, incompletePrerequisites } from "@/lib/task-actions";
+import { archiveTask, restoreTask, createTask, updateTask, deleteTask, leaveTask, setAssignees, moveTaskStatus, addTaskComment, uploadTaskAttachment, removeTaskAttachment, incompletePrerequisites } from "@/lib/task-actions";
 import { useAuth } from "@/context/auth-context";
 import { UserPicker } from "@/components/user-picker";
 import { ModalBackdrop } from "@/components/modal-backdrop";
@@ -79,9 +79,9 @@ export function TaskDialog({
 
   const canManageThisTask = task ? canManageSubteam(task.subteam) : true;
   const canDelete = mode === "edit" && task && canManageSubteam(task.subteam);
-  const readOnly = mode === "edit" && !canManageThisTask;
+  const readOnly = mode === "edit" && (!!task?.archived || !canManageThisTask);
   const isOnThisTask = !!(task && profile && task.assigneeUids.includes(profile.uid));
-  const hasStatusControl = mode === "edit" && (canManageThisTask || isOnThisTask);
+  const hasStatusControl = mode === "edit" && !task?.archived && (canManageThisTask || isOnThisTask);
   const canAttach = !readOnly || isOnThisTask;
 
   // Assignment is deliberately cross-subteam. A leaders-only task cannot be
@@ -93,6 +93,7 @@ export function TaskDialog({
   const incomplete = task ? incompletePrerequisites({ ...task, prerequisiteTaskIds }, tasks) : [];
 
   const prerequisiteOptions = tasks.filter((candidate) => {
+    if (candidate.archived) return false;
     if (candidate.id === task?.id) return false;
     if (!leadersOnly && candidate.leadersOnly) return false;
     if (!task) return true;
@@ -155,6 +156,9 @@ export function TaskDialog({
           attachments: [],
           links,
           order: Date.now(),
+          archived: false,
+          archivedAt: null,
+          archivedByUid: null,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
           assigneeUids,
         });
@@ -215,6 +219,24 @@ export function TaskDialog({
     if (!task || !profile) return;
     await leaveTask(task.id, actualProfile?.uid ?? profile.uid);
     onClose();
+  }
+
+  async function handleArchive() {
+    if (!task || !profile) return;
+    setError(null);
+    try {
+      await archiveTask(task.id, profile.uid);
+      onClose();
+    } catch { setError("Could not archive this task."); }
+  }
+
+  async function handleRestore() {
+    if (!task) return;
+    setError(null);
+    try {
+      await restoreTask(task.id);
+      onClose();
+    } catch { setError("Could not restore this task."); }
   }
 
   async function handleStatusChange(newStatus: TaskStatus) {
@@ -359,6 +381,13 @@ export function TaskDialog({
               year: "numeric",
             })}
           </p>
+        )}
+
+        {task?.archived && (
+          <div className="rounded-lg border border-hazard/40 bg-hazard/10 p-3 text-sm">
+            <p className="font-semibold">Archived task</p>
+            <p className="mt-1 text-xs text-steel">Hidden from normal task views{task.archivedAt ? ` since ${new Date(task.archivedAt).toLocaleDateString()}` : ""}. Restore it to return it to Done.</p>
+          </div>
         )}
 
         {hasStatusControl && (
@@ -734,6 +763,12 @@ export function TaskDialog({
             <button type="button" onClick={() => handleStatusChange("review")} disabled={changingStatus} className="btn-primary">
               {changingStatus ? "Moving…" : "Done — send to review"}
             </button>
+          )}
+          {canManageThisTask && status === "done" && !task?.archived && (
+            <button type="button" onClick={handleArchive} className="btn-secondary">Archive task</button>
+          )}
+          {canManageThisTask && task?.archived && (
+            <button type="button" onClick={handleRestore} className="btn-primary">Restore to Done</button>
           )}
           {isOnThisTask && (
             <button type="button" onClick={handleLeave} className="btn-secondary">

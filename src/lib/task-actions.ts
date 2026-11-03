@@ -182,3 +182,24 @@ export async function reorderTasks(updates: Array<{ id: string; status: TaskStat
   });
   await batch.commit();
 }
+
+export async function archiveTask(taskId: string, actorUid: string) {
+  const now = new Date().toISOString();
+  await updateDoc(doc(db, "tasks", taskId), {
+    archived: true,
+    archivedAt: now,
+    archivedByUid: actorUid,
+    status: "done",
+    updatedAt: now,
+  });
+}
+
+export async function restoreTask(taskId: string) {
+  await updateDoc(doc(db, "tasks", taskId), {
+    archived: false,
+    archivedAt: null,
+    archivedByUid: null,
+    status: "done",
+    updatedAt: new Date().toISOString(),
+  });
+}

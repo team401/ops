@@ -103,6 +103,9 @@ export interface Task {
   attachments: TaskAttachment[];
   links: TaskLink[];
   order: number;
+  archived: boolean;
+  archivedAt: string | null;
+  archivedByUid: string | null;
   createdAt: string;
   updatedAt: string;
   dueDate: string | null;
