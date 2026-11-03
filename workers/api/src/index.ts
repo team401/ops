@@ -17,12 +17,14 @@ interface FirestoreValue {
   stringValue?: string;
   booleanValue?: boolean;
   arrayValue?: { values?: FirestoreValue[] };
+  mapValue?: { fields?: Record<string, FirestoreValue> };
 }
 
 const firebaseKeys = createRemoteJWKSet(
   new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
 );
 const attachmentRoute = /^\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
+const attachmentMigrationRoute = /^\/migrations\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
 const maxAttachmentSize = 20 * 1024 * 1024;
 
 export default {
@@ -42,6 +44,65 @@ export default {
       return json({ ok: true }, 200, cors);
     }
 
+    const migrationMatch = url.pathname.match(attachmentMigrationRoute);
+    if (migrationMatch) {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405, headers: { ...Object.fromEntries(cors), Allow: "POST, OPTIONS" } });
+      }
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        const profile = await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
+        if (profile.fields?.role?.stringValue !== "coach") throw new Error("Forbidden");
+
+        const [, encodedTaskId, encodedAttachmentId, encodedFileName] = migrationMatch;
+        const taskId = decodeURIComponent(encodedTaskId);
+        const attachmentId = decodeURIComponent(encodedAttachmentId);
+        const fileName = decodeURIComponent(encodedFileName);
+        validateAttachmentPath(taskId, attachmentId, fileName);
+        const task = await fetchFirestoreDocument("tasks", taskId, token, env.FIREBASE_PROJECT_ID);
+        const attachment = findLegacyAttachment(task, attachmentId);
+        if (!attachment) return json({ error: "Legacy attachment not found" }, 404, cors);
+        const sourceUrl = attachment.url;
+        const storagePath = attachment.storagePath;
+        if (!sourceUrl || !storagePath?.startsWith(`task-attachments/${taskId}/`)) {
+          return json({ error: "Attachment source is invalid" }, 400, cors);
+        }
+        const source = new URL(sourceUrl);
+        if (!isFirebaseStorageHost(source.hostname)) {
+          return json({ error: "Attachment is not hosted by Firebase Storage" }, 400, cors);
+        }
+
+        const sourceResponse = await fetch(source);
+        if (!sourceResponse.ok) return json({ error: "Could not download the Firebase attachment" }, 502, cors);
+        const bytes = await sourceResponse.arrayBuffer();
+        if (bytes.byteLength > maxAttachmentSize) return json({ error: "Attachments must be 20 MB or smaller" }, 413, cors);
+        const sha256 = await digestHex(bytes);
+        const key = `task-attachments/${taskId}/${attachmentId}/${fileName}`;
+        const contentType = attachment.contentType || sourceResponse.headers.get("Content-Type") || "application/octet-stream";
+        await env.ATTACHMENTS.put(key, bytes, {
+          httpMetadata: { contentType, cacheControl: "public,max-age=31536000,immutable", contentDisposition: "inline" },
+          customMetadata: { taskId, attachmentId, uploadedByUid: uid, migratedFrom: "firebase", sha256 },
+        });
+        const copied = await env.ATTACHMENTS.get(key);
+        if (!copied || copied.size !== bytes.byteLength || await digestHex(await copied.arrayBuffer()) !== sha256) {
+          await env.ATTACHMENTS.delete(key);
+          return json({ error: "R2 verification failed" }, 500, cors);
+        }
+        return json({
+          key,
+          url: new URL(`/attachments/${encodeURIComponent(taskId)}/${encodeURIComponent(attachmentId)}/${encodeURIComponent(fileName)}`, request.url).href,
+          size: bytes.byteLength,
+          contentType,
+          sha256,
+        }, 201, cors);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Migration failed";
+        const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+        return json({ error: status === 500 ? "Attachment migration failed" : message }, status, cors);
+      }
+    }
+
     const match = url.pathname.match(attachmentRoute);
     if (!match) return json({ error: "Not found" }, 404, cors);
 
@@ -49,9 +110,7 @@ export default {
     const taskId = decodeURIComponent(encodedTaskId);
     const attachmentId = decodeURIComponent(encodedAttachmentId);
     const fileName = decodeURIComponent(encodedFileName);
-    if (!/^[A-Za-z0-9_-]+$/.test(taskId) || !/^[A-Za-z0-9_-]+$/.test(attachmentId) || !/^[A-Za-z0-9._-]+$/.test(fileName)) {
-      return json({ error: "Invalid attachment path" }, 400, cors);
-    }
+    try { validateAttachmentPath(taskId, attachmentId, fileName); } catch { return json({ error: "Invalid attachment path" }, 400, cors); }
     const key = `task-attachments/${taskId}/${attachmentId}/${fileName}`;
 
     if (request.method === "GET") {
@@ -151,10 +210,40 @@ function canChangeAttachments(uid: string, task: FirestoreDocument, profile: Fir
   return role === "coach" || (role === "student_leader" && profileSubteam === taskSubteam) || assignees.includes(uid);
 }
 
+function validateAttachmentPath(taskId: string, attachmentId: string, fileName: string) {
+  if (!/^[A-Za-z0-9_-]+$/.test(taskId) || !/^[A-Za-z0-9_-]+$/.test(attachmentId) || !/^[A-Za-z0-9._-]+$/.test(fileName)) {
+    throw new Error("Invalid attachment path");
+  }
+}
+
+function findLegacyAttachment(task: FirestoreDocument, attachmentId: string) {
+  const values = task.fields?.attachments?.arrayValue?.values ?? [];
+  for (const value of values) {
+    const fields = value.mapValue?.fields;
+    if (fields?.id?.stringValue === attachmentId && fields.storageProvider?.stringValue !== "r2") {
+      return {
+        url: fields.url?.stringValue,
+        storagePath: fields.storagePath?.stringValue,
+        contentType: fields.contentType?.stringValue,
+      };
+    }
+  }
+  return null;
+}
+
+function isFirebaseStorageHost(hostname: string) {
+  return hostname === "firebasestorage.googleapis.com" || hostname === "storage.googleapis.com";
+}
+
+async function digestHex(bytes: ArrayBuffer) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function corsHeaders(origin: string | null, env: Env) {
   const headers = new Headers({
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   });

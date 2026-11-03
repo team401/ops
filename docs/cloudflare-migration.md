@@ -72,6 +72,14 @@ path is activated only when Cloudflare Pages receives
 using Firebase Storage. Existing attachment records without a provider remain
 treated as Firebase objects.
 
+Coaches can open **Admin > Storage migration** to scan for legacy attachment
+records without changing anything. Migration copies one object at a time,
+verifies the R2 copy against the source SHA-256 hash, and only then updates the
+Firestore task record. It is safe to resume because records already marked
+`storageProvider: "r2"` are skipped. Firebase source objects are retained for
+rollback and must not be deleted until R2 has been stable through a full
+operating cycle.
+
 The Worker permits the production origin, local development, and all branch
 previews under the assigned `ops-34l.pages.dev` Pages hostname.
 

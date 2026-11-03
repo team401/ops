@@ -166,6 +166,9 @@ Uploaded task files are stored under `task-attachments/{taskId}/...`. When
 `NEXT_PUBLIC_OPS_API_URL` is configured, new files go to the
 `team401-ops-attachments` R2 bucket through the authenticated Ops Worker.
 Existing Firebase Storage attachments continue to work during migration.
+Coaches can inventory and migrate them from **Admin > Storage migration**.
+Scanning is read-only; migration verifies each R2 copy before updating its task
+record and does not delete the Firebase original.
 
 ## Timeclock and kiosk security
 

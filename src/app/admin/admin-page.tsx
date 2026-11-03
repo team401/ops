@@ -19,6 +19,7 @@ import {
 } from "@/lib/admin-actions";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { parseCsv, downloadCsv } from "@/lib/csv";
+import { inspectLegacyAttachments, migrateLegacyAttachment, type LegacyAttachmentCandidate } from "@/lib/attachment-migration";
 import { SUBTEAMS, type Role, type Subteam } from "@/types";
 
 interface AccountCredentials {
@@ -31,7 +32,7 @@ interface AccountCredentials {
 
 export default function AdminPage() {
   const { profile } = useAuth();
-  const [tab, setTab] = useState<"roster" | "certifications">("roster");
+  const [tab, setTab] = useState<"roster" | "certifications" | "storage">("roster");
 
   if (profile?.role !== "coach") {
     return (
@@ -55,11 +56,88 @@ export default function AdminPage() {
           onClick={() => setTab("certifications")}
           label="Certifications"
         />
+        <TabButton active={tab === "storage"} onClick={() => setTab("storage")} label="Storage migration" />
       </div>
 
-      {tab === "roster" ? <RosterTab /> : <CertificationsTab />}
+      {tab === "roster" ? <RosterTab /> : tab === "certifications" ? <CertificationsTab /> : <StorageMigrationTab />}
     </AppShell>
   );
+}
+
+function StorageMigrationTab() {
+  const [candidates, setCandidates] = useState<LegacyAttachmentCandidate[] | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [completed, setCompleted] = useState(0);
+  const [failures, setFailures] = useState<Array<{ name: string; error: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function scan() {
+    setScanning(true);
+    setError(null);
+    try {
+      setCandidates(await inspectLegacyAttachments());
+      setCompleted(0);
+      setFailures([]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not inspect Firebase attachments.");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function migrate() {
+    if (!candidates) return;
+    setMigrating(true);
+    setCompleted(0);
+    setFailures([]);
+    for (const candidate of candidates) {
+      try {
+        await migrateLegacyAttachment(candidate);
+        setCompleted((count) => count + 1);
+      } catch (caught) {
+        setFailures((current) => [...current, {
+          name: `${candidate.taskTitle} — ${candidate.attachment.name}`,
+          error: caught instanceof Error ? caught.message : "Migration failed",
+        }]);
+      }
+    }
+    setMigrating(false);
+    setCandidates(await inspectLegacyAttachments());
+  }
+
+  const totalBytes = candidates?.reduce((sum, candidate) => sum + candidate.attachment.size, 0) ?? 0;
+
+  return (
+    <div className="max-w-3xl space-y-4">
+      <div className="rounded-lg border border-steel-line bg-paper-raised p-4">
+        <h2 className="font-semibold">Firebase attachment migration</h2>
+        <p className="mt-1 text-sm text-steel">The scan is a dry run. Migration copies each legacy file to R2, verifies its SHA-256 hash, and only then updates the task. Firebase originals are not deleted.</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" className="btn-secondary" onClick={scan} disabled={scanning || migrating}>{scanning ? "Scanning…" : "Scan attachments"}</button>
+          {candidates && <span className="text-sm text-steel">{candidates.length} remaining · {formatMigrationBytes(totalBytes)}</span>}
+          {candidates && candidates.length > 0 && <button type="button" className="btn-primary" onClick={() => setConfirming(true)} disabled={migrating}>Migrate to R2</button>}
+        </div>
+        {migrating && <p className="mt-3 text-sm">Migrated {completed} of {candidates?.length ?? 0}…</p>}
+        {candidates?.length === 0 && <p className="mt-3 rounded-md bg-success/10 px-3 py-2 text-sm text-success">All recorded task attachments use R2.</p>}
+        {error && <p className="mt-3 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+      </div>
+      {failures.length > 0 && (
+        <div className="rounded-lg bg-danger/10 p-4 text-sm">
+          <p className="font-semibold text-danger">{failures.length} attachment{failures.length === 1 ? "" : "s"} could not be migrated</p>
+          <ul className="mt-2 space-y-1 text-steel">{failures.map((failure) => <li key={failure.name}>{failure.name}: {failure.error}</li>)}</ul>
+        </div>
+      )}
+      {confirming && candidates && <ConfirmDialog title="Migrate attachments to R2?" description={`Copy and verify ${candidates.length} attachment${candidates.length === 1 ? "" : "s"}. Existing Firebase files will be retained for rollback.`} confirmLabel="Start migration" onConfirm={migrate} onClose={() => setConfirming(false)} />}
+    </div>
+  );
+}
+
+function formatMigrationBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
