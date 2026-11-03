@@ -670,10 +670,7 @@ export function TaskDialog({
         <details className="task-dialog-section" open={mode === "create" || attachments.length > 0}>
           <summary>Attachments ({attachments.length + pendingFiles.length})</summary>
         <div
-          className={`border rounded p-3 transition-colors ${dragActive
-            ? "border-blueprint bg-blueprint/10"
-            : "border-dashed border-steel-line"
-          }`}
+          className={`mt-3 transition-colors ${dragActive ? "rounded-md bg-blueprint/10" : ""}`}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -688,13 +685,13 @@ export function TaskDialog({
               </label>
             )}
           </div>
-          <p className={`text-xs mt-1 ${dragActive ? "text-blueprint font-medium" : "text-steel"}`}>
-            {dragActive ? "Drop files here to attach them" : "Drag files here, or choose images and files up to 20 MB each."}
+          <p className={`mt-1 text-xs ${dragActive ? "px-2 pb-2 font-medium text-blueprint" : "text-steel"}`}>
+            {dragActive ? "Drop files here to attach them" : "You can also drag files anywhere in this section."}
           </p>
           {(attachments.length > 0 || pendingFiles.length > 0) && (
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-3 space-y-3">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="rounded border border-steel-line bg-surface p-2.5 text-sm">
+                <div key={attachment.id} className="text-sm">
                   {attachment.contentType.startsWith("image/") && (
                     <a href={attachment.url} target="_blank" rel="noreferrer" className="mb-2 block">
                       {/* User uploads use dynamic Firebase URLs in this static export. */}
@@ -702,7 +699,7 @@ export function TaskDialog({
                       <img
                         src={attachment.url}
                         alt={attachment.name}
-                        className="max-h-80 w-full rounded-sm border border-steel-line bg-paper object-contain"
+                        className="max-h-80 w-full rounded-md bg-surface object-contain"
                         loading="lazy"
                       />
                     </a>
@@ -720,7 +717,7 @@ export function TaskDialog({
                 </div>
               ))}
               {pendingFiles.map((file, index) => (
-                <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded border border-dashed border-steel-line px-2.5 py-2 text-sm">
+                <div key={`${file.name}-${index}`} className="flex items-center gap-2 py-1 text-sm">
                   <span className="truncate flex-1">{file.name}</span>
                   <span className="text-[10px] text-steel">Uploads when the task is created</span>
                   <button type="button" onClick={() => setPendingFiles((current) => current.filter((_, i) => i !== index))} className="text-danger text-xs">Remove</button>
