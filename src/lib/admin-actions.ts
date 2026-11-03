@@ -9,6 +9,7 @@ import { doc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "fire
 import app, { db } from "@/lib/firebase";
 import type { Role, Subteam, UserProfile, Certification } from "@/types";
 import { assignAvailableTimeclockPin, removeTimeclockPin } from "@/lib/timeclock-actions";
+import { certificationsUseD1, createD1Certification, deleteD1Certification, fetchCertifications, updateD1Certification } from "@/lib/certification-api";
 
 function randomTempPassword() {
   // Readable-ish temp password: e.g. "shop-4821-forge". Coach hands this to
@@ -109,6 +110,7 @@ export async function revokeCertification(uid: string, certificationId: string) 
 export async function createCertification(cert: Omit<Certification, "id">) {
   const ref = doc(db, "certifications", crypto.randomUUID());
   const full: Certification = { ...cert, id: ref.id };
+  if (certificationsUseD1()) return createD1Certification(full);
   await setDoc(ref, full);
   return full;
 }
@@ -117,9 +119,17 @@ export async function updateCertification(
   certId: string,
   changes: Partial<Omit<Certification, "id">>
 ) {
+  if (certificationsUseD1()) {
+    const current = await fetchCertifications();
+    const certification = current.find((item) => item.id === certId);
+    if (!certification) throw new Error("Certification not found.");
+    await updateD1Certification({ ...certification, ...changes });
+    return;
+  }
   await updateDoc(doc(db, "certifications", certId), changes);
 }
 
 export async function deleteCertification(certId: string) {
+  if (certificationsUseD1()) return deleteD1Certification(certId);
   await deleteDoc(doc(db, "certifications", certId));
 }

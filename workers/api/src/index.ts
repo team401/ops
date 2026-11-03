@@ -4,6 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 
 interface Env {
   ATTACHMENTS: R2Bucket;
+  DB: D1Database;
   FIREBASE_PROJECT_ID: string;
   ALLOWED_ORIGINS: string;
   PAGES_HOST_SUFFIX: string;
@@ -25,6 +26,7 @@ const firebaseKeys = createRemoteJWKSet(
 );
 const attachmentRoute = /^\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
 const attachmentMigrationRoute = /^\/migrations\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
+const certificationRoute = /^\/certifications(?:\/([^/]+))?$/;
 const maxAttachmentSize = 20 * 1024 * 1024;
 
 export default {
@@ -42,6 +44,63 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       return json({ ok: true }, 200, cors);
+    }
+
+    if (url.pathname === "/migrations/certifications") {
+      if (request.method !== "POST") return methodNotAllowed(cors, "POST, OPTIONS");
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        await requireCoach(uid, token, env);
+        const documents = await fetchFirestoreCollection("certifications", token, env.FIREBASE_PROJECT_ID);
+        const certifications = documents.map(parseFirestoreCertification);
+        if (certifications.length > 0) {
+          await env.DB.batch(certifications.map((certification) => certificationUpsert(env.DB, certification)));
+        }
+        const rows = await env.DB.prepare("SELECT id, name, description, subteam FROM certifications").all<CertificationRow>();
+        const byId = new Map(rows.results.map((row) => [row.id, row]));
+        const verified = certifications.every((certification) => {
+          const row = byId.get(certification.id);
+          return row?.name === certification.name && row.description === certification.description && row.subteam === certification.subteam;
+        });
+        if (!verified) return json({ error: "D1 verification failed" }, 500, cors);
+        return json({ copied: certifications.length, verified: certifications.length, d1Count: rows.results.length }, 200, cors);
+      } catch (error) {
+        return authenticatedError(error, cors, "Certification migration failed");
+      }
+    }
+
+    const certificationMatch = url.pathname.match(certificationRoute);
+    if (certificationMatch) {
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        if (request.method === "GET" && !certificationMatch[1]) {
+          await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
+          const result = await env.DB.prepare("SELECT id, name, description, subteam FROM certifications ORDER BY name COLLATE NOCASE").all<CertificationRow>();
+          return json(result.results, 200, cors);
+        }
+        await requireCoach(uid, token, env);
+        if (request.method === "POST" && !certificationMatch[1]) {
+          const certification = validateCertification(await request.json());
+          await certificationUpsert(env.DB, certification).run();
+          return json(certification, 201, cors);
+        }
+        const id = certificationMatch[1] ? decodeURIComponent(certificationMatch[1]) : "";
+        if (!/^[A-Za-z0-9_-]+$/.test(id)) return json({ error: "Invalid certification ID" }, 400, cors);
+        if (request.method === "PUT") {
+          const certification = validateCertification({ ...await request.json<Record<string, unknown>>(), id });
+          await certificationUpsert(env.DB, certification).run();
+          return json(certification, 200, cors);
+        }
+        if (request.method === "DELETE") {
+          await env.DB.prepare("DELETE FROM certifications WHERE id = ?").bind(id).run();
+          return new Response(null, { status: 204, headers: cors });
+        }
+        return methodNotAllowed(cors, certificationMatch[1] ? "PUT, DELETE, OPTIONS" : "GET, POST, OPTIONS");
+      } catch (error) {
+        return authenticatedError(error, cors, "Certification request failed");
+      }
     }
 
     const migrationMatch = url.pathname.match(attachmentMigrationRoute);
@@ -182,6 +241,35 @@ function bearerToken(request: Request) {
   return authorization.slice("Bearer ".length);
 }
 
+interface CertificationRow {
+  id: string;
+  name: string;
+  description: string;
+  subteam: string | null;
+}
+
+function validateCertification(value: unknown): CertificationRow {
+  if (!value || typeof value !== "object") throw new Error("Invalid certification");
+  const record = value as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id : "";
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  const description = typeof record.description === "string" ? record.description.trim() : "";
+  const subteam = record.subteam === null ? null : typeof record.subteam === "string" ? record.subteam : "";
+  const subteams = ["mechanical", "electrical", "programming", "cad", "outreach", "finance"];
+  if (!/^[A-Za-z0-9_-]+$/.test(id) || name.length < 1 || name.length > 120 || description.length > 1000 || (subteam !== null && !subteams.includes(subteam))) {
+    throw new Error("Invalid certification");
+  }
+  return { id, name, description, subteam };
+}
+
+function certificationUpsert(db: D1Database, certification: CertificationRow) {
+  return db.prepare(`INSERT INTO certifications (id, name, description, subteam, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description,
+      subteam = excluded.subteam, updated_at = excluded.updated_at`)
+    .bind(certification.id, certification.name, certification.description, certification.subteam, new Date().toISOString());
+}
+
 async function verifyFirebaseToken(token: string, projectId: string) {
   const { payload } = await jwtVerify(token, firebaseKeys, {
     algorithms: ["RS256"],
@@ -200,6 +288,31 @@ async function fetchFirestoreDocument(collection: string, id: string, token: str
   if (response.status === 401) throw new Error("Unauthorized");
   if (!response.ok) throw new Error("Forbidden");
   return response.json<FirestoreDocument>();
+}
+
+async function fetchFirestoreCollection(collection: string, token: string, projectId: string) {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/${collection}?pageSize=1000`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (response.status === 401) throw new Error("Unauthorized");
+  if (!response.ok) throw new Error("Forbidden");
+  const result = await response.json<{ documents?: Array<FirestoreDocument & { name?: string }> }>();
+  return result.documents ?? [];
+}
+
+function parseFirestoreCertification(document: FirestoreDocument & { name?: string }) {
+  return validateCertification({
+    id: document.fields?.id?.stringValue ?? document.name?.split("/").at(-1),
+    name: document.fields?.name?.stringValue,
+    description: document.fields?.description?.stringValue ?? "",
+    subteam: document.fields?.subteam?.stringValue ?? null,
+  });
+}
+
+async function requireCoach(uid: string, token: string, env: Env) {
+  const profile = await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
+  if (profile.fields?.role?.stringValue !== "coach") throw new Error("Forbidden");
 }
 
 function canChangeAttachments(uid: string, task: FirestoreDocument, profile: FirestoreDocument) {
@@ -267,4 +380,14 @@ function json(body: unknown, status: number, headers: Headers) {
   const responseHeaders = new Headers(headers);
   responseHeaders.set("Content-Type", "application/json; charset=utf-8");
   return new Response(JSON.stringify(body), { status, headers: responseHeaders });
+}
+
+function methodNotAllowed(headers: Headers, allow: string) {
+  return new Response("Method not allowed", { status: 405, headers: { ...Object.fromEntries(headers), Allow: allow } });
+}
+
+function authenticatedError(error: unknown, cors: Headers, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : message.startsWith("Invalid") ? 400 : 500;
+  return json({ error: status === 500 ? fallback : message }, status, cors);
 }

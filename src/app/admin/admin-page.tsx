@@ -20,6 +20,7 @@ import {
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { parseCsv, downloadCsv } from "@/lib/csv";
 import { inspectLegacyAttachments, migrateLegacyAttachment, type LegacyAttachmentCandidate } from "@/lib/attachment-migration";
+import { migrateCertificationsToD1 } from "@/lib/certification-api";
 import { SUBTEAMS, type Role, type Subteam } from "@/types";
 
 interface AccountCredentials {
@@ -56,7 +57,7 @@ export default function AdminPage() {
           onClick={() => setTab("certifications")}
           label="Certifications"
         />
-        <TabButton active={tab === "storage"} onClick={() => setTab("storage")} label="Storage migration" />
+        <TabButton active={tab === "storage"} onClick={() => setTab("storage")} label="Data migration" />
       </div>
 
       {tab === "roster" ? <RosterTab /> : tab === "certifications" ? <CertificationsTab /> : <StorageMigrationTab />}
@@ -72,6 +73,13 @@ function StorageMigrationTab() {
   const [completed, setCompleted] = useState(0);
   const [failures, setFailures] = useState<Array<{ name: string; error: string }>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingCertifications, setConfirmingCertifications] = useState(false);
+  const [certificationResult, setCertificationResult] = useState<string | null>(null);
+
+  async function migrateCertifications() {
+    const result = await migrateCertificationsToD1();
+    setCertificationResult(`${result.verified} certifications copied and verified in D1 (${result.d1Count} total).`);
+  }
 
   async function scan() {
     setScanning(true);
@@ -112,6 +120,12 @@ function StorageMigrationTab() {
   return (
     <div className="max-w-3xl space-y-4">
       <div className="rounded-lg border border-steel-line bg-paper-raised p-4">
+        <h2 className="font-semibold">Certification data migration</h2>
+        <p className="mt-1 text-sm text-steel">Copy the Firestore certification catalog into the shared D1 database and verify every row. Firestore remains unchanged as the rollback source.</p>
+        <button type="button" className="btn-primary mt-4" onClick={() => setConfirmingCertifications(true)}>Copy certifications to D1</button>
+        {certificationResult && <p className="mt-3 rounded-md bg-success/10 px-3 py-2 text-sm text-success">{certificationResult}</p>}
+      </div>
+      <div className="rounded-lg border border-steel-line bg-paper-raised p-4">
         <h2 className="font-semibold">Firebase attachment migration</h2>
         <p className="mt-1 text-sm text-steel">The scan is a dry run. Migration copies each legacy file to R2, verifies its SHA-256 hash, and only then updates the task. Firebase originals are not deleted.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -130,6 +144,7 @@ function StorageMigrationTab() {
         </div>
       )}
       {confirming && candidates && <ConfirmDialog title="Migrate attachments to R2?" description={`Copy and verify ${candidates.length} attachment${candidates.length === 1 ? "" : "s"}. Existing Firebase files will be retained for rollback.`} confirmLabel="Start migration" onConfirm={migrate} onClose={() => setConfirming(false)} />}
+      {confirmingCertifications && <ConfirmDialog title="Copy certifications to D1?" description="Copy and verify the Firestore certification catalog in D1. The Firestore records will be retained for rollback." confirmLabel="Copy and verify" onConfirm={migrateCertifications} onClose={() => setConfirmingCertifications(false)} />}
     </div>
   );
 }

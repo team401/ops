@@ -166,9 +166,20 @@ Uploaded task files are stored under `task-attachments/{taskId}/...`. When
 `NEXT_PUBLIC_OPS_API_URL` is configured, new files go to the
 `team401-ops-attachments` R2 bucket through the authenticated Ops Worker.
 Existing Firebase Storage attachments continue to work during migration.
-Coaches can inventory and migrate them from **Admin > Storage migration**.
+Coaches can inventory and migrate them from **Admin > Data migration**.
 Scanning is read-only; migration verifies each R2 copy before updating its task
 record and does not delete the Firebase original.
+
+The certification catalog is the first Firestore domain moving to the shared
+`team401-ops` D1 database. Apply its schema before deploying the Worker:
+
+```bash
+npm run d1:migrate
+npm run worker:deploy
+```
+
+Then a coach can copy and verify the existing catalog from **Admin > Data
+migration**. Firestore certification records remain available for rollback.
 
 ## Timeclock and kiosk security
 

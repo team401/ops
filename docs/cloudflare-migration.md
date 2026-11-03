@@ -110,6 +110,25 @@ events can be evaluated later if polling is not responsive enough. The Worker
 free tier currently allows 100,000 requests per day, so polling frequency must
 be measured rather than guessed.
 
+Implementation status: the shared `team401-ops` D1 database exists in ENAM and
+is bound to the Ops Worker as `DB`. Migration `0001_certifications.sql` creates
+the first domain table. When the Worker API URL is configured, certification
+catalog reads and coach CRUD use D1; Firebase Auth and Firestore user profiles
+continue to supply identity, roles, and each member's certification IDs.
+
+Coaches can run **Admin > Data migration > Copy certifications to D1**. The
+Worker reads the existing Firestore catalog under the coach's Firebase token,
+upserts it into D1, and compares every copied row before reporting success.
+Firestore certification documents are retained as the rollback snapshot.
+
+Apply future checked-in D1 migrations before deploying Worker code that needs
+them:
+
+```bash
+npm run d1:migrate
+npm run worker:deploy
+```
+
 Cloudflare documentation:
 https://developers.cloudflare.com/d1/platform/pricing/
 https://developers.cloudflare.com/workers/platform/limits/

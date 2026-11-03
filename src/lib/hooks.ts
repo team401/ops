@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
+import { certificationsUseD1, fetchCertifications } from "@/lib/certification-api";
 import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem, CalendarEvent } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
@@ -79,6 +80,25 @@ export function useCertifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (certificationsUseD1()) {
+      let active = true;
+      const load = () => fetchCertifications().then((records) => {
+        if (active) setCertifications(records);
+      }).catch((error) => {
+        console.error("Could not load certifications from D1", error);
+      }).finally(() => { if (active) setLoading(false); });
+      void load();
+      const interval = window.setInterval(load, 60_000);
+      const handleFocus = () => { void load(); };
+      window.addEventListener("focus", handleFocus);
+      window.addEventListener("ops:certifications-changed", handleFocus);
+      return () => {
+        active = false;
+        window.clearInterval(interval);
+        window.removeEventListener("focus", handleFocus);
+        window.removeEventListener("ops:certifications-changed", handleFocus);
+      };
+    }
     const unsub = onSnapshot(collection(db, "certifications"), (snap) => {
       setCertifications(snap.docs.map((d) => d.data() as Certification));
       setLoading(false);
