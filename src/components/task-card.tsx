@@ -50,7 +50,11 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
         <div className="min-w-0 flex-1 text-left">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className="tracked-label text-[10px] font-bold" style={{ color: `color-mix(in srgb, ${meta.color} 70%, var(--ink))` }}>{meta.label}</span>
+              <span className="text-[10px] font-bold" style={{ color: `color-mix(in srgb, ${meta.color} 70%, var(--ink))` }}>
+                <span className="tracked-label">{meta.label}</span>
+                <span className="mx-1 text-steel">—</span>
+                <span className="text-ink">{assignees.length > 0 ? assignees.map((item) => item.displayName).join(", ") : "Unclaimed"}</span>
+              </span>
               {task.leadersOnly && <span className="rounded-full bg-blueprint/12 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">Leaders only</span>}
               {task.archived && <span className="rounded-full bg-hazard/15 px-1.5 py-0.5 text-[9px] font-bold text-hazard">Archived</span>}
             </div>
@@ -59,7 +63,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
           <p className="mt-1 break-words text-sm font-semibold leading-snug">{task.title}</p>
         </div>
       </div>
-      <div className="px-2.5 pb-2.5">
+      <div className={`px-2.5 ${collapsed ? "pb-1" : "pb-2.5"}`}>
         {(task.status === "blocked" || incomplete.length > 0) && <div className="mb-1.5 rounded-md border border-hazard/35 bg-hazard/10 px-2 py-1.5 text-xs">{incomplete.length > 0 ? `Waiting on ${incomplete.map((item) => item.title).join(", ")}` : `${task.blockedReason ? BLOCKED_REASON_LABEL[task.blockedReason] : "Stuck"}${task.blockedDetails ? ` — ${task.blockedDetails}` : ""}`}</div>}
         {!collapsed && <>
           {firstLink && <a href={firstLink.url} target="_blank" rel="noopener noreferrer" onPointerDown={(event) => event.stopPropagation()} className="mb-1.5 flex items-center gap-1.5 rounded-md border border-blueprint/20 bg-blueprint/8 px-2 py-1.5 text-xs font-medium text-blueprint hover:bg-blueprint/15"><ExternalLink size={12} /><span className="truncate">{firstLink.label || firstLink.url}</span></a>}
@@ -71,15 +75,11 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
           {requiredCerts.length > 0 && <div className="mb-1.5 flex flex-wrap gap-1">{requiredCerts.map((certification) => <span key={certification.id} className="rounded-full border border-steel-line bg-surface px-1.5 py-0.5 text-[9px] font-bold text-steel">{certification.name}</span>)}</div>}
           {latestComment && <div className="mb-1.5 rounded-md border border-steel-line bg-surface/75 px-2 py-1.5"><p className="text-[10px] font-semibold text-steel">Latest update · {latestCommentAuthor?.displayName ?? "Former team member"}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-xs">{latestComment.body}</p></div>}
         </>}
-        <div className="flex w-full items-start justify-between gap-2 border-t border-steel-line pt-1.5 text-left">
-          <span className="min-w-0 flex-1 break-words text-xs font-medium">{assignees.length > 0 ? assignees.map((item) => item.displayName).join(", ") : "Unclaimed"}</span>
-          {!collapsed && <span className="shrink-0 text-[11px] text-steel">{task.dueDate ? `due ${new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}` : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}</span>}
-        </div>
-        {!collapsed && <p className="mt-1 text-[11px] text-steel">POC: {contact?.displayName ?? "Task creator"}</p>}
+        {!collapsed && <div className="mt-1 flex items-start justify-between gap-2 text-[11px] text-steel"><span>POC: {contact?.displayName ?? "Task creator"}</span><span className="shrink-0">{task.dueDate ? `due ${new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}` : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}</span></div>}
       </div>
-      <div className="grid grid-cols-2 border-t border-steel-line bg-surface/55 p-1.5" onPointerDown={(event) => event.stopPropagation()}>
-        <button type="button" onClick={onOpen} className="flex min-h-10 items-center justify-center gap-1.5 rounded-md text-xs font-semibold text-blueprint hover:bg-blueprint/10"><Maximize2 size={15} />Open task</button>
-        <button type="button" onClick={() => setCollapsedOverride(!collapsed)} className="flex min-h-10 items-center justify-center gap-1.5 rounded-md text-xs font-semibold text-ink hover:bg-ink/5" aria-expanded={!collapsed}><ChevronDown size={16} className={`transition-transform ${collapsed ? "-rotate-90" : ""}`} />{collapsed ? "Expand card" : "Collapse card"}</button>
+      <div className="grid grid-cols-2 border-t border-steel-line bg-surface/55 p-1" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" onClick={onOpen} className="flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-blueprint hover:bg-blueprint/10"><Maximize2 size={13} />Open</button>
+        <button type="button" onClick={() => setCollapsedOverride(!collapsed)} className="flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-ink hover:bg-ink/5" aria-expanded={!collapsed}><ChevronDown size={14} className={`transition-transform ${collapsed ? "-rotate-90" : ""}`} />{collapsed ? "Expand" : "Collapse"}</button>
       </div>
       {canClaim && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => profile && claimTask(task.id, profile.uid)} className="w-full border-t border-success/30 bg-success/10 py-2 text-center text-[10px] font-bold hover:bg-success/20">Claim task</button>}
       {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && <div className="w-full border-t border-danger/30 bg-danger/10 py-1.5 text-center text-[10px] font-bold">Certification required</div>}
