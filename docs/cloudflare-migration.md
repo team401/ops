@@ -64,6 +64,14 @@ ten million Class B operations, and free egress each month on its free tier.
 Cloudflare documentation:
 https://developers.cloudflare.com/r2/pricing/
 
+Implementation status: the repository contains the `team401-ops-api` Worker,
+Firebase ID-token verification, Firestore-backed permission checks, an R2
+binding for `team401-ops-attachments`, and dual-storage client support. The R2
+path is activated only when Cloudflare Pages receives
+`NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org`; otherwise uploads keep
+using Firebase Storage. Existing attachment records without a provider remain
+treated as Firebase objects.
+
 ### 3. Put a Worker API in front of application data
 
 Do not let the browser connect directly to D1. Add authenticated Worker routes

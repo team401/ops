@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker:check": "tsc -p workers/api/tsconfig.json",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -17,6 +20,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "firebase": "^13.0.0",
+    "jose": "^6.2.15",
     "lucide-react": "^1.31.0",
     "next": "16.4.3",
     "papaparse": "^5.6.0",
@@ -27,6 +31,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261103.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^26.0.0",
     "@types/react": "^19",
@@ -34,11 +39,14 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "wrangler": "^4.157.0"
   },
   "allowScripts": {
     "unrs-resolver@1.12.2": true,
-    "@firebase/util@1.15.2": true,
-    "protobufjs@7.6.5": true
+    "@firebase/util@1.15.3": true,
+    "esbuild@0.28.2": true,
+    "protobufjs@7.6.6": true,
+    "workerd@1.20261103.1": true
   }
 }

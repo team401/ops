@@ -9,7 +9,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import type { Task, TaskStatus, TaskHistoryEntry, TaskComment, TaskAttachment } from "@/types";
 
 export async function createTask(
@@ -63,6 +63,46 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
   const id = crypto.randomUUID();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const storagePath = `task-attachments/${taskId}/${id}/${safeName}`;
+  const attachmentApiUrl = process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
+  if (attachmentApiUrl) {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error("Sign in again before uploading an attachment.");
+    const response = await fetch(
+      `${attachmentApiUrl}/attachments/${encodeURIComponent(taskId)}/${encodeURIComponent(id)}/${encodeURIComponent(safeName)}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": file.type || "application/octet-stream",
+        },
+        body: file,
+      },
+    );
+    if (!response.ok) throw new Error("The attachment could not be uploaded to R2.");
+    const result = await response.json() as { url: string; key: string };
+    const attachment: TaskAttachment = {
+      id,
+      name: file.name,
+      url: result.url,
+      storagePath: result.key,
+      storageProvider: "r2",
+      contentType: file.type || "application/octet-stream",
+      size: file.size,
+      uploadedByUid,
+      createdAt: new Date().toISOString(),
+    };
+    try {
+      await updateDoc(doc(db, "tasks", taskId), {
+        attachments: arrayUnion(attachment),
+        updatedAt: attachment.createdAt,
+      });
+    } catch (error) {
+      await deleteR2Attachment(taskId, attachment).catch(() => undefined);
+      throw error;
+    }
+    return attachment;
+  }
+
   const storageRef = ref(storage, storagePath);
   await uploadBytes(storageRef, file, {
     contentType: file.type || "application/octet-stream",
@@ -75,6 +115,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
     name: file.name,
     url: await getDownloadURL(storageRef),
     storagePath,
+    storageProvider: "firebase",
     contentType: file.type || "application/octet-stream",
     size: file.size,
     uploadedByUid,
@@ -93,7 +134,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
 }
 
 export async function removeTaskAttachment(taskId: string, attachment: TaskAttachment) {
-  await deleteObject(ref(storage, attachment.storagePath));
+  await deleteAttachmentObject(taskId, attachment);
   await updateDoc(doc(db, "tasks", taskId), {
     attachments: arrayRemove(attachment),
     updatedAt: new Date().toISOString(),
@@ -102,9 +143,29 @@ export async function removeTaskAttachment(taskId: string, attachment: TaskAttac
 
 export async function deleteTask(task: Task) {
   await Promise.allSettled(
-    (task.attachments ?? []).map((attachment) => deleteObject(ref(storage, attachment.storagePath)))
+    (task.attachments ?? []).map((attachment) => deleteAttachmentObject(task.id, attachment))
   );
   await deleteDoc(doc(db, "tasks", task.id));
+}
+
+async function deleteAttachmentObject(taskId: string, attachment: TaskAttachment) {
+  if (attachment.storageProvider === "r2") {
+    await deleteR2Attachment(taskId, attachment);
+    return;
+  }
+  await deleteObject(ref(storage, attachment.storagePath));
+}
+
+async function deleteR2Attachment(taskId: string, attachment: TaskAttachment) {
+  const attachmentApiUrl = process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
+  const token = await auth.currentUser?.getIdToken();
+  if (!attachmentApiUrl || !token) throw new Error("R2 attachment service is unavailable.");
+  const safeName = attachment.storagePath.split("/").at(-1) ?? attachment.name;
+  const response = await fetch(
+    `${attachmentApiUrl}/attachments/${encodeURIComponent(taskId)}/${encodeURIComponent(attachment.id)}/${encodeURIComponent(safeName)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok && response.status !== 404) throw new Error("The R2 attachment could not be deleted.");
 }
 
 // A student joining an open task they're certified for. Security rules

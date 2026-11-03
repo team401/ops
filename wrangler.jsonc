@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "team401-ops-api",
+  "main": "workers/api/src/index.ts",
+  "compatibility_date": "2026-11-03",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "api.ops.team401.org",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "FIREBASE_PROJECT_ID": "team-401",
+    "ALLOWED_ORIGINS": "https://ops.team401.org,http://localhost:3000",
+    "PAGES_HOST_SUFFIX": "team401-ops.pages.dev"
+  },
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "team401-ops-attachments"
+    }
+  ]
+}

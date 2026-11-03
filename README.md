@@ -93,6 +93,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
 NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org
 ```
 
 These values identify the Firebase web app and are safe to include in a client build. Firebase security rules, not secrecy of these values, protect application data.
@@ -161,7 +162,10 @@ The app currently uses these top-level collections:
 - `timeclockPins` — coach-only kiosk PIN records kept separate from public profiles
 - `timeEntries` — shop and outreach attendance sessions
 
-Uploaded task files are stored under `task-attachments/{taskId}/...` in Firebase Storage.
+Uploaded task files are stored under `task-attachments/{taskId}/...`. When
+`NEXT_PUBLIC_OPS_API_URL` is configured, new files go to the
+`team401-ops-attachments` R2 bucket through the authenticated Ops Worker.
+Existing Firebase Storage attachments continue to work during migration.
 
 ## Timeclock and kiosk security
 
@@ -182,6 +186,19 @@ Configure the Pages project with `npm run build`, output directory `out`, and
 all `NEXT_PUBLIC_FIREBASE_*` environment variables listed above. No base path is
 used because production and each Cloudflare branch preview are served from the
 root of their respective hostnames.
+
+## Deploying the attachment Worker
+
+`wrangler.jsonc` defines the `team401-ops-api` Worker, its
+`team401-ops-attachments` R2 binding, and the `api.ops.team401.org` custom
+domain. The Worker verifies Firebase ID tokens and checks Firestore task and
+profile permissions before allowing uploads or deletions.
+
+Run `npm run worker:check` and `npm exec wrangler deploy -- --dry-run` before
+deployment. Deploy with `npm run worker:deploy`, then add
+`NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org` to both production and
+preview variables in Cloudflare Pages. Until that variable is present, uploads
+deliberately continue using Firebase Storage.
 
 Renovate targets `staging` and automatically merges routine non-major updates
 only after the install, lint, and production-build checks pass. Major updates
