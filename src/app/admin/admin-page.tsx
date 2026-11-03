@@ -21,6 +21,7 @@ import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { parseCsv, downloadCsv } from "@/lib/csv";
 import { inspectLegacyAttachments, migrateLegacyAttachment, type LegacyAttachmentCandidate } from "@/lib/attachment-migration";
 import { migrateCertificationsToD1 } from "@/lib/certification-api";
+import { migrateOperationsToD1 } from "@/lib/operations-api";
 import { SUBTEAMS, type Role, type Subteam } from "@/types";
 
 interface AccountCredentials {
@@ -75,10 +76,17 @@ function StorageMigrationTab() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingCertifications, setConfirmingCertifications] = useState(false);
   const [certificationResult, setCertificationResult] = useState<string | null>(null);
+  const [confirmingOperations, setConfirmingOperations] = useState(false);
+  const [operationsResult, setOperationsResult] = useState<string | null>(null);
 
   async function migrateCertifications() {
     const result = await migrateCertificationsToD1();
     setCertificationResult(`${result.verified} certifications copied and verified in D1 (${result.d1Count} total).`);
+  }
+
+  async function migrateOperations() {
+    const result = await migrateOperationsToD1();
+    setOperationsResult(`${result.verified.calendarEvents} calendar events, ${result.verified.timeEntries} time entries, and ${result.verified.timeclockPins} PINs verified in D1. Device sessions will move automatically as each browser reconnects.`);
   }
 
   async function scan() {
@@ -120,6 +128,12 @@ function StorageMigrationTab() {
   return (
     <div className="max-w-3xl space-y-4">
       <div className="rounded-lg border border-steel-line bg-paper-raised p-4">
+        <h2 className="font-semibold">Operations data migration</h2>
+        <p className="mt-1 text-sm text-steel">Copy and verify calendar events, attendance history, and timeclock PINs together. Signed-in device records move automatically as browsers reconnect. Firestore remains unchanged for rollback.</p>
+        <button type="button" className="btn-primary mt-4" onClick={() => setConfirmingOperations(true)}>Copy operational data to D1</button>
+        {operationsResult && <p className="mt-3 rounded-md bg-success/10 px-3 py-2 text-sm text-success">{operationsResult}</p>}
+      </div>
+      <div className="rounded-lg border border-steel-line bg-paper-raised p-4">
         <h2 className="font-semibold">Certification data migration</h2>
         <p className="mt-1 text-sm text-steel">Copy the Firestore certification catalog into the shared D1 database and verify every row. Firestore remains unchanged as the rollback source.</p>
         <button type="button" className="btn-primary mt-4" onClick={() => setConfirmingCertifications(true)}>Copy certifications to D1</button>
@@ -145,6 +159,7 @@ function StorageMigrationTab() {
       )}
       {confirming && candidates && <ConfirmDialog title="Migrate attachments to R2?" description={`Copy and verify ${candidates.length} attachment${candidates.length === 1 ? "" : "s"}. Existing Firebase files will be retained for rollback.`} confirmLabel="Start migration" onConfirm={migrate} onClose={() => setConfirming(false)} />}
       {confirmingCertifications && <ConfirmDialog title="Copy certifications to D1?" description="Copy and verify the Firestore certification catalog in D1. The Firestore records will be retained for rollback." confirmLabel="Copy and verify" onConfirm={migrateCertifications} onClose={() => setConfirmingCertifications(false)} />}
+      {confirmingOperations && <ConfirmDialog title="Copy operational data to D1?" description="Copy and verify calendar events, attendance history, and timeclock PINs in one batch. Firestore records will be retained for rollback." confirmLabel="Copy and verify all" onConfirm={migrateOperations} onClose={() => setConfirmingOperations(false)} />}
     </div>
   );
 }

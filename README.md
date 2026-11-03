@@ -181,6 +181,12 @@ npm run worker:deploy
 Then a coach can copy and verify the existing catalog from **Admin > Data
 migration**. Firestore certification records remain available for rollback.
 
+The next checked-in migration batches calendar events, attendance entries,
+timeclock PINs, and signed-in device sessions. Run **Copy operational data to
+D1** once from the same Admin tab; device sessions move automatically as each
+browser reconnects. Firestore records are retained throughout the rollback
+window.
+
 ## Timeclock and kiosk security
 
 Only a coach can launch the kiosk. Kiosk PINs identify which team member is clocking in or out; they are not Firebase passwords and cannot be used to sign into the main application.

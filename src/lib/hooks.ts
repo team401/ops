@@ -5,6 +5,7 @@ import { collection, onSnapshot, query, orderBy, where } from "firebase/firestor
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
 import { certificationsUseD1, fetchCertifications } from "@/lib/certification-api";
+import { fetchCalendarEvents, fetchTimeEntries, fetchTimeclockPins, operationsUseD1 } from "@/lib/operations-api";
 import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem, CalendarEvent } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
@@ -114,6 +115,14 @@ export function useCalendarEvents() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (operationsUseD1()) {
+      let active = true;
+      const load = () => fetchCalendarEvents().then((records) => { if (active) setEvents(records); }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load();
+      const interval = window.setInterval(load, 60_000);
+      window.addEventListener("ops:calendar-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:calendar-changed", load); };
+    }
     const source = query(collection(db, "calendarEvents"), orderBy("startDate", "asc"));
     return onSnapshot(source, (snapshot) => {
       setEvents(snapshot.docs.map((record) => record.data() as CalendarEvent));
@@ -132,6 +141,14 @@ export function useTimeEntries(scopeUid: string | null | undefined) {
 
   useEffect(() => {
     if (scopeUid === undefined) return;
+    if (operationsUseD1()) {
+      let active = true;
+      const load = () => fetchTimeEntries(scopeUid === null).then((records) => { if (active) setEntries(records.sort((a, b) => b.clockIn.localeCompare(a.clockIn))); }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load();
+      const interval = window.setInterval(load, 30_000);
+      window.addEventListener("ops:time-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:time-changed", load); };
+    }
     const source = scopeUid
       ? query(collection(db, "timeEntries"), where("uid", "==", scopeUid))
       : collection(db, "timeEntries");
@@ -154,6 +171,13 @@ export function useTimeclockPins(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
+    if (operationsUseD1()) {
+      let active = true;
+      const load = () => fetchTimeclockPins().then((records) => { if (active) setPins(records); }).catch(console.error);
+      void load();
+      window.addEventListener("ops:pins-changed", load);
+      return () => { active = false; window.removeEventListener("ops:pins-changed", load); };
+    }
     return onSnapshot(collection(db, "timeclockPins"), (snap) => {
       setPins(snap.docs.map((pin) => pin.data() as TimeclockPin));
     });

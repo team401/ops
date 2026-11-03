@@ -121,6 +121,14 @@ Worker reads the existing Firestore catalog under the coach's Firebase token,
 upserts it into D1, and compares every copied row before reporting success.
 Firestore certification documents are retained as the rollback snapshot.
 
+Migration `0002_operations.sql` moves the next group together: calendar
+events, time entries, timeclock PINs, and device sessions. Coaches use the
+single **Copy operational data to D1** action to copy and field-verify the
+three shared Firestore collections. Device sessions migrate lazily when each
+browser reconnects because the original Firestore rules intentionally allow
+users to read only their own device records. The D1-backed clients use short
+polling intervals plus immediate local refresh events after writes.
+
 Apply future checked-in D1 migrations before deploying Worker code that needs
 them:
 

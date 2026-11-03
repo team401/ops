@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { handleOperations, isOperationsRoute } from "./operations";
 
 interface Env {
   ATTACHMENTS: R2Bucket;
@@ -44,6 +45,16 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       return json({ ok: true }, 200, cors);
+    }
+
+    if (isOperationsRoute(url.pathname)) {
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        return handleOperations(request, env, uid, token, cors);
+      } catch (error) {
+        return authenticatedError(error, cors, "Data request failed");
+      }
     }
 
     if (url.pathname === "/migrations/certifications") {
