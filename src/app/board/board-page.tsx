@@ -1,25 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { KanbanBoard } from "@/components/kanban-board";
-import { useAuth } from "@/context/auth-context";
 import { useTasks, useUsers, useCertifications } from "@/lib/hooks";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { SUBTEAMS, type Subteam } from "@/types";
 
 export default function BoardPage() {
-  const { profile, isCoach } = useAuth();
   const { tasks } = useTasks();
   const { users } = useUsers();
   const { certifications } = useCertifications();
   const [filter, setFilter] = useState<Subteam | "all">("all");
 
-  const editableSubteams = useMemo(() => {
-    if (isCoach) return SUBTEAMS;
-    if (profile?.role === "student_leader" && profile.subteam) return [profile.subteam];
-    return [];
-  }, [isCoach, profile]);
+  const editableSubteams = SUBTEAMS;
 
   return (
     <AppShell>

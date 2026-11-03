@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, FormEvent, ChangeEvent, DragEvent } from "react";
-import type { Task, Subteam, Priority, Certification, UserProfile, TaskStatus, BlockedReason, TaskAttachment } from "@/types";
+import type { Task, Subteam, Priority, Certification, UserProfile, TaskStatus, BlockedReason, TaskAttachment, TaskLink } from "@/types";
 import { TASK_STATUSES } from "@/types";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
-import { createTask, updateTask, deleteTask, leaveTask, setAssignees, moveTaskStatus, addTaskComment, uploadTaskAttachment, removeTaskAttachment, incompletePrerequisites } from "@/lib/task-actions";
+import { archiveTask, restoreTask, createTask, updateTask, deleteTask, leaveTask, setAssignees, moveTaskStatus, addTaskComment, uploadTaskAttachment, removeTaskAttachment, incompletePrerequisites } from "@/lib/task-actions";
 import { useAuth } from "@/context/auth-context";
 import { UserPicker } from "@/components/user-picker";
 import { ModalBackdrop } from "@/components/modal-backdrop";
@@ -46,7 +46,7 @@ export function TaskDialog({
   task,
   onClose,
 }: TaskDialogProps) {
-  const { profile, isCoach, canManageSubteam } = useAuth();
+  const { profile, actualProfile, isCoach, canManageSubteam } = useAuth();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [leadersOnly, setLeadersOnly] = useState(task?.leadersOnly ?? false);
@@ -66,6 +66,7 @@ export function TaskDialog({
   const [comments, setComments] = useState(task?.comments ?? []);
   const [commentBody, setCommentBody] = useState("");
   const [attachments, setAttachments] = useState(task?.attachments ?? []);
+  const [links, setLinks] = useState<TaskLink[]>(task?.links ?? []);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -78,9 +79,9 @@ export function TaskDialog({
 
   const canManageThisTask = task ? canManageSubteam(task.subteam) : true;
   const canDelete = mode === "edit" && task && canManageSubteam(task.subteam);
-  const readOnly = mode === "edit" && !canManageThisTask;
+  const readOnly = mode === "edit" && (!!task?.archived || !canManageThisTask);
   const isOnThisTask = !!(task && profile && task.assigneeUids.includes(profile.uid));
-  const hasStatusControl = mode === "edit" && (canManageThisTask || isOnThisTask);
+  const hasStatusControl = mode === "edit" && !task?.archived && (canManageThisTask || isOnThisTask);
   const canAttach = !readOnly || isOnThisTask;
 
   // Assignment is deliberately cross-subteam. A leaders-only task cannot be
@@ -92,6 +93,7 @@ export function TaskDialog({
   const incomplete = task ? incompletePrerequisites({ ...task, prerequisiteTaskIds }, tasks) : [];
 
   const prerequisiteOptions = tasks.filter((candidate) => {
+    if (candidate.archived) return false;
     if (candidate.id === task?.id) return false;
     if (!leadersOnly && candidate.leadersOnly) return false;
     if (!task) return true;
@@ -145,19 +147,24 @@ export function TaskDialog({
           priority,
           requiredCertificationIds,
           requireAllCertifications: requireAll,
-          createdByUid: profile.uid,
-          pointOfContactUid: pointOfContactUid || profile.uid,
+          createdByUid: actualProfile?.uid ?? profile.uid,
+          pointOfContactUid: pointOfContactUid || actualProfile?.uid || profile.uid,
           blockedReason: blockedReason || null,
           blockedDetails,
           prerequisiteTaskIds,
           comments: [],
           attachments: [],
+          links,
+          order: Date.now(),
+          archived: false,
+          archivedAt: null,
+          archivedByUid: null,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
           assigneeUids,
         });
         if (pendingFiles.length > 0) {
           const results = await Promise.allSettled(
-            pendingFiles.map((file) => uploadTaskAttachment(created.id, file, profile.uid))
+            pendingFiles.map((file) => uploadTaskAttachment(created.id, file, actualProfile?.uid ?? profile.uid))
           );
           if (results.some((result) => result.status === "rejected")) {
             alert("The task was created, but at least one attachment could not be uploaded. You can add it again from the task details.");
@@ -177,6 +184,7 @@ export function TaskDialog({
           blockedReason: blockedReason || null,
           blockedDetails,
           prerequisiteTaskIds,
+          links,
         });
         const changed =
           assigneeUids.length !== task.assigneeUids.length ||
@@ -209,8 +217,26 @@ export function TaskDialog({
 
   async function handleLeave() {
     if (!task || !profile) return;
-    await leaveTask(task.id, profile.uid);
+    await leaveTask(task.id, actualProfile?.uid ?? profile.uid);
     onClose();
+  }
+
+  async function handleArchive() {
+    if (!task || !profile) return;
+    setError(null);
+    try {
+      await archiveTask(task.id, profile.uid);
+      onClose();
+    } catch { setError("Could not archive this task."); }
+  }
+
+  async function handleRestore() {
+    if (!task) return;
+    setError(null);
+    try {
+      await restoreTask(task.id);
+      onClose();
+    } catch { setError("Could not restore this task."); }
   }
 
   async function handleStatusChange(newStatus: TaskStatus) {
@@ -237,11 +263,19 @@ export function TaskDialog({
     );
   }
 
+  function addLink() {
+    setLinks((current) => [...current, { id: crypto.randomUUID(), label: "", url: "" }]);
+  }
+
+  function changeLink(id: string, changes: Partial<TaskLink>) {
+    setLinks((current) => current.map((link) => link.id === id ? { ...link, ...changes } : link));
+  }
+
   async function handleAddComment() {
     if (!task || !profile || !commentBody.trim()) return;
     setError(null);
     try {
-      const comment = await addTaskComment(task.id, commentBody, profile.uid);
+      const comment = await addTaskComment(task.id, commentBody, actualProfile?.uid ?? profile.uid);
       setComments((current) => [...current, comment]);
       setCommentBody("");
     } catch {
@@ -262,7 +296,7 @@ export function TaskDialog({
     setUploading(true);
     setError(null);
     try {
-      const results = await Promise.allSettled(files.map((file) => uploadTaskAttachment(task.id, file, profile.uid)));
+      const results = await Promise.allSettled(files.map((file) => uploadTaskAttachment(task.id, file, actualProfile?.uid ?? profile.uid)));
       const uploaded = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       setAttachments((current) => [...current, ...uploaded]);
       if (results.some((result) => result.status === "rejected")) {
@@ -347,6 +381,13 @@ export function TaskDialog({
               year: "numeric",
             })}
           </p>
+        )}
+
+        {task?.archived && (
+          <div className="rounded-lg border border-hazard/40 bg-hazard/10 p-3 text-sm">
+            <p className="font-semibold">Archived task</p>
+            <p className="mt-1 text-xs text-steel">Hidden from normal task views{task.archivedAt ? ` since ${new Date(task.archivedAt).toLocaleDateString()}` : ""}. Restore it to return it to Done.</p>
+          </div>
         )}
 
         {hasStatusControl && (
@@ -467,7 +508,7 @@ export function TaskDialog({
           />
         </label>
 
-        {(!readOnly || leadersOnly) && (
+        {(!readOnly || leadersOnly) && (profile?.role === "coach" || profile?.role === "student_leader") && (
           <label className="flex items-start gap-3 rounded border border-steel-line bg-surface p-3">
             <input
               type="checkbox"
@@ -485,6 +526,9 @@ export function TaskDialog({
           </label>
         )}
 
+        <details className="task-dialog-section" open={mode === "create"}>
+          <summary>Assignment &amp; requirements</summary>
+          <div className="mt-3 space-y-4">
         {!readOnly && (
           <div>
             <span className="tracked-label text-xs text-steel">Assignees</span>
@@ -593,7 +637,26 @@ export function TaskDialog({
             </p>
           )}
         </div>
+          </div>
+        </details>
 
+        <details className="task-dialog-section" open={mode === "create" || links.length > 0}>
+          <summary>Links ({links.length})</summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-steel">The first link is shown on the task card. Put the most useful CAD or reference link first.</p>
+            {links.map((link, index) => (
+              <div key={link.id} className="grid gap-2 rounded-lg border border-steel-line bg-surface p-2.5 sm:grid-cols-[1fr_1.6fr_auto]">
+                <input className="input" value={link.label} onChange={(event) => changeLink(link.id, { label: event.target.value })} placeholder={index === 0 ? "Primary link label" : "Link label"} disabled={readOnly} />
+                <input type="url" className="input" value={link.url} onChange={(event) => changeLink(link.id, { url: event.target.value })} placeholder="https://…" required disabled={readOnly} />
+                {readOnly ? <a href={link.url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-center text-xs">Open</a> : <button type="button" onClick={() => setLinks((current) => current.filter((item) => item.id !== link.id))} className="text-xs text-danger">Remove</button>}
+              </div>
+            ))}
+            {!readOnly && <button type="button" onClick={addLink} className="btn-secondary text-xs">+ Add link</button>}
+          </div>
+        </details>
+
+        <details className="task-dialog-section" open={mode === "create" || attachments.length > 0}>
+          <summary>Attachments ({attachments.length + pendingFiles.length})</summary>
         <div
           className={`border rounded p-3 transition-colors ${dragActive
             ? "border-blueprint bg-blueprint/10"
@@ -605,7 +668,7 @@ export function TaskDialog({
           onDrop={handleDrop}
         >
           <div className="flex items-center justify-between gap-3">
-            <span className="tracked-label text-xs text-steel">Attachments ({attachments.length + pendingFiles.length})</span>
+            <span className="text-xs text-steel">Images and files up to 20 MB each</span>
             {canAttach && (
               <label className="btn-secondary text-xs cursor-pointer">
                 {uploading ? "Uploading…" : "Add files"}
@@ -654,6 +717,7 @@ export function TaskDialog({
             </div>
           )}
         </div>
+        </details>
 
         {task && (
           <div className="border-t border-steel-line pt-4">
@@ -694,6 +758,17 @@ export function TaskDialog({
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Saving…" : mode === "create" ? "Create task" : "Save changes"}
             </button>
+          )}
+          {hasStatusControl && status !== "review" && status !== "done" && (
+            <button type="button" onClick={() => handleStatusChange("review")} disabled={changingStatus} className="btn-primary">
+              {changingStatus ? "Moving…" : "Done — send to review"}
+            </button>
+          )}
+          {canManageThisTask && status === "done" && !task?.archived && (
+            <button type="button" onClick={handleArchive} className="btn-secondary">Archive task</button>
+          )}
+          {canManageThisTask && task?.archived && (
+            <button type="button" onClick={handleRestore} className="btn-primary">Restore to Done</button>
           )}
           {isOnThisTask && (
             <button type="button" onClick={handleLeave} className="btn-secondary">

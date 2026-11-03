@@ -23,17 +23,17 @@
 
 :root[data-theme="dark"] {
     color-scheme: dark;
-    --ink: #f2f4f5;
-    --paper: #171a1c;
-    --paper-raised: #202426;
-    --surface: #252a2d;
-    --blueprint: #e09ab3;
-    --blueprint-deep: #f0b8cb;
-    --hazard: #ef865f;
-    --steel: #aab1b6;
-    --steel-line: #363c40;
-    --success: #4fae74;
-    --danger: #d1584c;
+    --ink: #f4f5f6;
+    --paper: #24282b;
+    --paper-raised: #2c3134;
+    --surface: #303538;
+    --blueprint: #a72b58;
+    --blueprint-deep: #861f41;
+    --hazard: #f18761;
+    --steel: #bdc3c7;
+    --steel-line: #4a5155;
+    --success: #63b783;
+    --danger: #ed756a;
     --mech: #55789f;
     --elec: #9b741f;
     --prog: #318a73;
@@ -111,7 +111,7 @@ body {
   border: 1px solid var(--steel-line);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 4px;
+  border-radius: .55rem;
   padding: .5rem .75rem;
   font-size: .9rem;
   outline: none;
@@ -130,7 +130,7 @@ body {
   background: var(--blueprint);
   color: white;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: .55rem;
   padding: .55rem 1rem;
   font-size: .9rem;
   transition: background .15s ease;
@@ -149,7 +149,7 @@ body {
   border: 1px solid var(--steel-line);
   color: var(--ink);
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: .55rem;
   padding: .55rem 1rem;
   font-size: .9rem;
 }
@@ -162,7 +162,7 @@ body {
   background: var(--danger);
   color: white;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: .55rem;
   padding: .55rem 1rem;
   font-size: .9rem;
   transition: filter .15s ease;
@@ -174,4 +174,37 @@ body {
 
 .btn-danger:disabled {
   opacity: .6;
+}
+
+select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.task-dialog-section,
+.account-card {
+  border: 1px solid var(--steel-line);
+  border-radius: .75rem;
+  background: var(--paper-raised);
+}
+
+.task-dialog-section {
+  padding: .75rem;
+}
+
+.task-dialog-section > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.account-card {
+  padding: 1rem;
+}
+
+.account-card > h2 {
+  margin-bottom: .75rem;
+  font-size: 1rem;
+  font-weight: 700;
 }

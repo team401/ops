@@ -1,7 +1,9 @@
 "use client";
 
-import { useDraggable } from "@dnd-kit/core";
+import { useMemo, useState } from "react";
+import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ChevronDown, ExternalLink, Maximize2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Task, Certification, UserProfile } from "@/types";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
@@ -9,139 +11,78 @@ import { useAuth } from "@/context/auth-context";
 import { claimTask, incompletePrerequisites } from "@/lib/task-actions";
 
 const PRIORITY_MARK: Record<Task["priority"], { label: string; color: string }> = {
-  high: { label: "High", color: "var(--danger)" },
-  medium: { label: "Medium", color: "var(--hazard)" },
-  low: { label: "Low", color: "var(--steel)" },
+  high: { label: "High", color: "var(--danger)" }, medium: { label: "Medium", color: "var(--hazard)" }, low: { label: "Low", color: "var(--steel)" },
 };
-
 const BLOCKED_REASON_LABEL: Record<NonNullable<Task["blockedReason"]>, string> = {
-  parts: "Waiting on parts / order",
-  information: "Waiting on information",
-  approval: "Waiting on approval",
-  prerequisite: "Waiting on prerequisite",
-  other: "Blocked",
+  parts: "Waiting on parts / order", information: "Waiting on information", approval: "Waiting on approval", prerequisite: "Waiting on prerequisite", other: "Blocked",
 };
 
-export function TaskCard({ task, tasks, certifications, users, draggable, onOpen }: {
-  task: Task; tasks: Task[]; certifications: Certification[]; users: UserProfile[]; draggable: boolean; onOpen: () => void;
+export function TaskCard({ task, tasks, certifications, users, draggable, onOpen, defaultCollapsed = false }: {
+  task: Task; tasks: Task[]; certifications: Certification[]; users: UserProfile[]; draggable: boolean; onOpen: () => void; defaultCollapsed?: boolean;
 }) {
-  const { profile } = useAuth();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id, disabled: !draggable });
+  const { profile, actualProfile } = useAuth();
+  const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
+  const collapsed = collapsedOverride ?? defaultCollapsed;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !draggable, data: { status: task.status } });
   const meta = SUBTEAM_META[task.subteam];
-  const assignees = users.filter((u) => task.assigneeUids.includes(u.uid));
-  const imageAttachments = (task.attachments ?? []).filter((attachment) =>
-    attachment.contentType.startsWith("image/")
-  );
-  const requiredCerts = certifications.filter((c) => task.requiredCertificationIds.includes(c.id));
-  const contact = users.find((u) => u.uid === (task.pointOfContactUid || task.createdByUid));
+  const assignees = users.filter((user) => task.assigneeUids.includes(user.uid));
+  const imageAttachments = (task.attachments ?? []).filter((attachment) => attachment.contentType.startsWith("image/"));
+  const requiredCerts = certifications.filter((certification) => task.requiredCertificationIds.includes(certification.id));
+  const contact = users.find((user) => user.uid === (task.pointOfContactUid || task.createdByUid));
   const incomplete = incompletePrerequisites(task, tasks);
+  const latestComment = useMemo(() => [...(task.comments ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0], [task.comments]);
+  const latestCommentAuthor = users.find((user) => user.uid === latestComment?.authorUid);
+  const firstLink = task.links?.[0];
   const alreadyOn = !!profile && task.assigneeUids.includes(profile.uid);
-  const isEligible = !!profile && (task.requiredCertificationIds.length === 0 ||
-    (task.requireAllCertifications
-      ? task.requiredCertificationIds.every((id) => profile.certificationIds.includes(id))
-      : task.requiredCertificationIds.some((id) => profile.certificationIds.includes(id))));
-  const canClaim = task.assigneeUids.length === 0 && isEligible &&
-    (profile?.role === "student" || profile?.role === "student_leader");
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
-    : undefined;
+  const isEligible = !!profile && (task.requiredCertificationIds.length === 0 || (task.requireAllCertifications
+    ? task.requiredCertificationIds.every((id) => profile.certificationIds.includes(id))
+    : task.requiredCertificationIds.some((id) => profile.certificationIds.includes(id))));
+  const canClaim = task.assigneeUids.length === 0 && isEligible && (profile?.role === "student" || profile?.role === "student_leader");
 
   return (
-    <div ref={setNodeRef}
-      style={{
-        ...style,
-        backgroundColor: `color-mix(in srgb, ${meta.color} 12%, var(--surface))`,
-        borderLeftColor: meta.color,
-      }}
-      className="relative rounded-sm border border-l-4 border-ink/15 text-ink shadow-sm transition-shadow hover:shadow-md">
-      <button onClick={onOpen} {...(draggable ? { ...listeners, ...attributes } : {})}
-        className={`w-full p-2.5 text-left ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="tracked-label text-[10px] font-bold"
-              style={{ color: `color-mix(in srgb, ${meta.color} 65%, var(--ink))` }}>{meta.label}</span>
-            {task.leadersOnly && (
-              <span className="tracked-label rounded-sm border border-blueprint/25 bg-blueprint/10 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">
-                Leaders only
+    <article
+      ref={setNodeRef}
+      {...(draggable ? { ...listeners, ...attributes } : {})}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1, backgroundColor: `color-mix(in srgb, ${meta.color} 9%, var(--surface))`, borderLeftColor: meta.color }}
+      className={`relative rounded-lg border border-l-4 border-steel-line text-ink shadow-sm transition-shadow hover:shadow-md ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+    >
+      <div className="flex items-start gap-1 p-2.5">
+        <div className="min-w-0 flex-1 text-left">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold" style={{ color: `color-mix(in srgb, ${meta.color} 70%, var(--ink))` }}>
+                <span className="tracked-label">{meta.label}</span>
+                <span className="mx-1 text-steel">—</span>
+                <span className="text-ink">{assignees.length > 0 ? assignees.map((item) => item.displayName).join(", ") : "Unclaimed"}</span>
               </span>
-            )}
+              {task.leadersOnly && <span className="rounded-full bg-blueprint/12 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">Leaders only</span>}
+              {task.archived && <span className="rounded-full bg-hazard/15 px-1.5 py-0.5 text-[9px] font-bold text-hazard">Archived</span>}
+            </div>
+            <span className="rounded-full border border-steel-line bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold" style={{ color: PRIORITY_MARK[task.priority].color }}>{PRIORITY_MARK[task.priority].label}</span>
           </div>
-          <span className="tracked-label rounded border border-ink/10 bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold"
-            style={{ color: `color-mix(in srgb, ${PRIORITY_MARK[task.priority].color} 65%, var(--ink))` }}
-            title={`${task.priority} priority`}>
-            {PRIORITY_MARK[task.priority].label}
-          </span>
+          <p className="mt-1 break-words text-sm font-semibold leading-snug">{task.title}</p>
         </div>
-        <p className="mt-1.5 break-words text-sm font-semibold leading-snug text-ink">{task.title}</p>
-        {task.description && (
-          <p className="mt-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/85">
-            {task.description}
-          </p>
-        )}
-        {imageAttachments.length > 0 && (
-          <div className={`mt-2 grid gap-1.5 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-            {imageAttachments.map((attachment) => (
-              // User uploads have dynamic Firebase URLs, and this app is a static export.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={attachment.id}
-                src={attachment.url}
-                alt={attachment.name}
-                className="max-h-40 w-full rounded border border-ink/15 bg-surface object-contain"
-                loading="lazy"
-              />
-            ))}
-          </div>
-        )}
-        {(task.status === "blocked" || incomplete.length > 0) && (
-          <div className="mt-1.5 rounded-sm border border-ink/15 bg-surface/75 px-2 py-1.5 text-xs text-ink">
-            {incomplete.length > 0 ? (
-              <span>Waiting on {incomplete.map((prerequisite) => prerequisite.title).join(", ")}</span>
-            ) : (
-              <span className="font-semibold">
-                {task.blockedReason ? BLOCKED_REASON_LABEL[task.blockedReason] : "Stuck"}
-                {task.blockedDetails ? ` — ${task.blockedDetails}` : ""}
-              </span>
-            )}
-          </div>
-        )}
-        {requiredCerts.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {requiredCerts.map((c) => (
-              <span key={c.id} className="tracked-label rounded-sm border border-steel-line bg-surface px-1.5 py-0.5 text-[9px] font-bold text-blueprint-deep">
-                {c.name}
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="mt-2 flex items-start justify-between gap-2 border-t border-dashed border-ink/20 pt-1.5">
-          <span className="min-w-0 flex-1 break-words text-xs font-medium text-ink">
-            {assignees.length > 0 ? assignees.map((a) => a.displayName).join(", ") : "Unclaimed"}
-          </span>
-          <span className="shrink-0 whitespace-nowrap text-xs font-medium text-steel">
-            {task.dueDate ? `due ${new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}`
-              : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-start justify-between gap-2 text-[11px] font-medium text-steel">
-          <span className="min-w-0 flex-1 break-words">POC: {contact?.displayName ?? "Task creator"}</span>
-          <span className="shrink-0 flex gap-2">
-            {(task.attachments?.length ?? 0) > 0 && <span title="Attachments">▤ {task.attachments.length}</span>}
-            {(task.comments?.length ?? 0) > 0 && <span title="Updates">◫ {task.comments.length}</span>}
-          </span>
-        </div>
-      </button>
-      {canClaim && (
-        <button onClick={(e) => { e.stopPropagation(); if (profile) claimTask(task.id, profile.uid); }}
-          className="tracked-label w-full border-t border-success/30 bg-success/10 py-1.5 text-center text-[10px] font-bold text-ink hover:bg-success/20">
-          Claim task
-        </button>
-      )}
-      {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && (
-        <div className="tracked-label w-full border-t border-danger/30 bg-danger/10 py-1.5 text-center text-[10px] font-bold text-ink">
-          Cert required
-        </div>
-      )}
-    </div>
+      </div>
+      <div className={`px-2.5 ${collapsed ? "pb-1" : "pb-2.5"}`}>
+        {(task.status === "blocked" || incomplete.length > 0) && <div className="mb-1.5 rounded-md border border-hazard/35 bg-hazard/10 px-2 py-1.5 text-xs">{incomplete.length > 0 ? `Waiting on ${incomplete.map((item) => item.title).join(", ")}` : `${task.blockedReason ? BLOCKED_REASON_LABEL[task.blockedReason] : "Stuck"}${task.blockedDetails ? ` — ${task.blockedDetails}` : ""}`}</div>}
+        {!collapsed && <>
+          {firstLink && <a href={firstLink.url} target="_blank" rel="noopener noreferrer" onPointerDown={(event) => event.stopPropagation()} className="mb-1.5 flex items-center gap-1.5 rounded-md border border-blueprint/20 bg-blueprint/8 px-2 py-1.5 text-xs font-medium text-blueprint hover:bg-blueprint/15"><ExternalLink size={12} /><span className="truncate">{firstLink.label || firstLink.url}</span></a>}
+          {task.description && <p className="mb-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/85">{task.description}</p>}
+          {imageAttachments.length > 0 && <div className={`mb-1.5 grid gap-1.5 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>{imageAttachments.map((attachment) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={attachment.id} src={attachment.url} alt={attachment.name} className="max-h-40 w-full rounded-md border border-steel-line bg-surface object-contain" loading="lazy" />
+          ))}</div>}
+          {requiredCerts.length > 0 && <div className="mb-1.5 flex flex-wrap gap-1">{requiredCerts.map((certification) => <span key={certification.id} className="rounded-full border border-steel-line bg-surface px-1.5 py-0.5 text-[9px] font-bold text-steel">{certification.name}</span>)}</div>}
+          {latestComment && <div className="mb-1.5 rounded-md border border-steel-line bg-surface/75 px-2 py-1.5"><p className="text-[10px] font-semibold text-steel">Latest update · {latestCommentAuthor?.displayName ?? "Former team member"}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-xs">{latestComment.body}</p></div>}
+        </>}
+        {!collapsed && <div className="mt-1 flex items-start justify-between gap-2 text-[11px] text-steel"><span>POC: {contact?.displayName ?? "Task creator"}</span><span className="shrink-0">{task.dueDate ? `due ${new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}` : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}</span></div>}
+      </div>
+      <div className="grid grid-cols-2 border-t border-steel-line bg-surface/55 p-1" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" onClick={onOpen} className="flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-blueprint hover:bg-blueprint/10"><Maximize2 size={13} />Open</button>
+        <button type="button" onClick={() => setCollapsedOverride(!collapsed)} className="flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-ink hover:bg-ink/5" aria-expanded={!collapsed}><ChevronDown size={14} className={`transition-transform ${collapsed ? "-rotate-90" : ""}`} />{collapsed ? "Expand" : "Collapse"}</button>
+      </div>
+      {canClaim && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => profile && claimTask(task.id, actualProfile?.uid ?? profile.uid)} className="w-full border-t border-success/30 bg-success/10 py-2 text-center text-[10px] font-bold hover:bg-success/20">Claim task</button>}
+      {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && <div className="w-full border-t border-danger/30 bg-danger/10 py-1.5 text-center text-[10px] font-bold">Certification required</div>}
+    </article>
   );
 }

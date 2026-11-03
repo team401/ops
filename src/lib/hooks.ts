@@ -38,6 +38,11 @@ export function useTasks() {
               prerequisiteTaskIds: data.prerequisiteTaskIds ?? [],
               comments: data.comments ?? [],
               attachments: data.attachments ?? [],
+              links: data.links ?? [],
+              order: data.order ?? new Date(data.createdAt).getTime(),
+              archived: data.archived ?? false,
+              archivedAt: data.archivedAt ?? null,
+              archivedByUid: data.archivedByUid ?? null,
             } as Task;
           })
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
