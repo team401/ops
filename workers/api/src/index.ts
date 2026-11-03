@@ -213,7 +213,15 @@ export default {
       const token = bearerToken(request);
       const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
       const [task, profile] = await Promise.all([fetchD1Task(env.DB, taskId), fetchD1Profile(env.DB, uid)]);
-      if (!task || !profile || !canChangeAttachments(uid, task, profile)) {
+      let authorized = Boolean(task && profile && canChangeAttachments(uid, task, profile));
+      if (!task || !profile) {
+        const [firestoreTask, firestoreProfile] = await Promise.all([
+          fetchFirestoreDocument("tasks", taskId, token, env.FIREBASE_PROJECT_ID),
+          fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID),
+        ]);
+        authorized = canChangeFirestoreAttachments(uid, firestoreTask, firestoreProfile);
+      }
+      if (!authorized) {
         return json({ error: "You cannot change attachments on this task" }, 403, cors);
       }
 
@@ -342,6 +350,16 @@ function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUid
   const taskSubteam = task.subteam;
   const assignees = task.assigneeUids ?? [];
   return role === "coach" || (role === "student_leader" && profileSubteam === taskSubteam) || assignees.includes(uid);
+}
+
+function canChangeFirestoreAttachments(uid: string, task: FirestoreDocument, profile: FirestoreDocument) {
+  return canChangeAttachments(uid, {
+    subteam: task.fields?.subteam?.stringValue,
+    assigneeUids: task.fields?.assigneeUids?.arrayValue?.values?.flatMap((value) => value.stringValue ? [value.stringValue] : []) ?? [],
+  }, {
+    role: profile.fields?.role?.stringValue,
+    subteam: profile.fields?.subteam?.stringValue ?? null,
+  });
 }
 
 async function fetchD1Task(db: D1Database, id: string) {
