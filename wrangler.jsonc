@@ -16,7 +16,7 @@
 	},
 	"vars": {
 		"FIREBASE_PROJECT_ID": "team-401",
-		"ALLOWED_ORIGINS": "https://ops.team401.org,http://localhost:3000",
+		"ALLOWED_ORIGINS": "https://ops.team401.org,https://staging.ops.team401.org,http://localhost:3000",
 		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev"
 	},
 	"r2_buckets": [
