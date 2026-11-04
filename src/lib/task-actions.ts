@@ -11,7 +11,7 @@ import {
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import type { Task, TaskStatus, TaskHistoryEntry, TaskComment, TaskAttachment } from "@/types";
-import { coreUsesD1, createD1Task, deleteD1Task, fetchTasks, patchD1Task } from "@/lib/core-api";
+import { appendD1TaskAttachment, coreUsesD1, createD1Task, deleteD1Task, fetchTasks, patchD1Task } from "@/lib/core-api";
 
 async function currentTask(taskId: string) { const task = (await fetchTasks()).find((item) => item.id === taskId); if (!task) throw new Error("Task not found."); return task; }
 
@@ -83,8 +83,8 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
         body: file,
       },
     );
-    if (!response.ok) throw new Error("The attachment could not be uploaded to R2.");
-    const result = await response.json() as { url: string; key: string };
+    const result = await response.json() as { url?: string; key?: string; error?: string };
+    if (!response.ok || !result.url || !result.key) throw new Error(result.error ?? "The attachment could not be uploaded to R2.");
     const attachment: TaskAttachment = {
       id,
       name: file.name,
@@ -97,7 +97,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
       createdAt: new Date().toISOString(),
     };
     try {
-      if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { attachments: [...task.attachments, attachment], updatedAt: attachment.createdAt }); return attachment; }
+      if (coreUsesD1()) { await appendD1TaskAttachment(taskId, attachment); return attachment; }
       await updateDoc(doc(db, "tasks", taskId), {
         attachments: arrayUnion(attachment),
         updatedAt: attachment.createdAt,
