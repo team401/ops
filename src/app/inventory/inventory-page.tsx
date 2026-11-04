@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ModalBackdrop } from "@/components/modal-backdrop";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/context/auth-context";
 import {
   adjustInventoryQuantity,
@@ -66,6 +67,7 @@ export default function InventoryPage() {
   const [editing, setEditing] = useState<InventoryItem | "new" | null>(null);
   const [adjusting, setAdjusting] = useState<InventoryItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<InventoryItem | null>(null);
 
   const standards = useMemo(
     () => unique(items.flatMap((item) => [item.specs.beltProfile, item.specs.chainSize])),
@@ -98,7 +100,6 @@ export default function InventoryPage() {
     : null;
 
   async function removeItem(item: InventoryItem) {
-    if (!window.confirm(`Permanently delete ${item.name}?`)) return;
     setActionError(null);
     try {
       await deleteInventoryItem(item.id);
@@ -232,7 +233,7 @@ export default function InventoryPage() {
                 isCoach={isCoach}
                 onAdjust={() => setAdjusting(selected)}
                 onEdit={() => setEditing(selected)}
-                onDelete={() => removeItem(selected)}
+              onDelete={() => setPendingDelete(selected)}
               />
             ) : (
               <div className="flex min-h-80 flex-col items-center justify-center px-8 text-center text-steel">
@@ -259,6 +260,7 @@ export default function InventoryPage() {
       {adjusting && actor && (
         <AdjustDialog item={adjusting} actor={actor} onClose={() => setAdjusting(null)} />
       )}
+      {pendingDelete && <ConfirmDialog title="Delete inventory item?" description={`Permanently delete ${pendingDelete.name}? This cannot be undone.`} confirmLabel="Delete item" destructive onConfirm={() => removeItem(pendingDelete)} onClose={() => setPendingDelete(null)} />}
     </AppShell>
   );
 }

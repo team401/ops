@@ -71,6 +71,7 @@ export interface TaskAttachment {
   name: string;
   url: string;
   storagePath: string;
+  storageProvider?: "firebase" | "r2";
   contentType: string;
   size: number;
   uploadedByUid: string;

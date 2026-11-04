@@ -9,6 +9,7 @@ import {
 import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
+import { coreUsesD1, saveUser } from "@/lib/core-api";
 
 export default function LoginPage() {
   const { firebaseUser, profile, loading } = useAuth();
@@ -56,9 +57,8 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await updatePassword(auth.currentUser, newPassword);
-      await updateDoc(doc(db, "users", auth.currentUser.uid), {
-        mustResetPassword: false,
-      });
+      if (coreUsesD1() && profile) await saveUser({ ...profile, mustResetPassword: false });
+      else await updateDoc(doc(db, "users", auth.currentUser.uid), { mustResetPassword: false });
       router.replace("/board");
     } catch {
       setError("Couldn't update your password. Try signing in again.");

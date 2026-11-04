@@ -76,6 +76,7 @@ export function TaskDialog({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdWithAttachmentError, setCreatedWithAttachmentError] = useState(false);
 
   const canManageThisTask = task ? canManageSubteam(task.subteam) : true;
   const canDelete = mode === "edit" && task && canManageSubteam(task.subteam);
@@ -167,7 +168,8 @@ export function TaskDialog({
             pendingFiles.map((file) => uploadTaskAttachment(created.id, file, actualProfile?.uid ?? profile.uid))
           );
           if (results.some((result) => result.status === "rejected")) {
-            alert("The task was created, but at least one attachment could not be uploaded. You can add it again from the task details.");
+            setCreatedWithAttachmentError(true);
+            return;
           }
         }
       } else if (task) {
@@ -194,8 +196,9 @@ export function TaskDialog({
         }
       }
       onClose();
-    } catch {
-      setError("Something went wrong saving this task. Try again.");
+    } catch (caught) {
+      console.error("Task save failed", caught);
+      setError(caught instanceof Error ? caught.message : "Something went wrong saving this task. Try again.");
     } finally {
       setSubmitting(false);
     }
@@ -352,6 +355,16 @@ export function TaskDialog({
       setError("Could not remove that attachment.");
     }
   }
+
+  if (createdWithAttachmentError) return (
+    <ModalBackdrop onClose={onClose}>
+      <section role="dialog" aria-modal="true" aria-labelledby="attachment-warning-title" className="w-full max-w-sm rounded-lg border border-steel-line bg-paper-raised p-5 shadow-xl">
+        <h2 id="attachment-warning-title" className="text-lg font-semibold">Task created</h2>
+        <p className="mt-2 text-sm text-steel">At least one attachment could not be uploaded. Open the new task and add the file again.</p>
+        <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="btn-primary">Close</button></div>
+      </section>
+    </ModalBackdrop>
+  );
 
   return (
     <>
@@ -658,10 +671,7 @@ export function TaskDialog({
         <details className="task-dialog-section" open={mode === "create" || attachments.length > 0}>
           <summary>Attachments ({attachments.length + pendingFiles.length})</summary>
         <div
-          className={`border rounded p-3 transition-colors ${dragActive
-            ? "border-blueprint bg-blueprint/10"
-            : "border-dashed border-steel-line"
-          }`}
+          className={`mt-3 transition-colors ${dragActive ? "rounded-md bg-blueprint/10" : ""}`}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -676,13 +686,13 @@ export function TaskDialog({
               </label>
             )}
           </div>
-          <p className={`text-xs mt-1 ${dragActive ? "text-blueprint font-medium" : "text-steel"}`}>
-            {dragActive ? "Drop files here to attach them" : "Drag files here, or choose images and files up to 20 MB each."}
+          <p className={`mt-1 text-xs ${dragActive ? "px-2 pb-2 font-medium text-blueprint" : "text-steel"}`}>
+            {dragActive ? "Drop files here to attach them" : "You can also drag files anywhere in this section."}
           </p>
           {(attachments.length > 0 || pendingFiles.length > 0) && (
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-3 space-y-3">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="rounded border border-steel-line bg-surface p-2.5 text-sm">
+                <div key={attachment.id} className="text-sm">
                   {attachment.contentType.startsWith("image/") && (
                     <a href={attachment.url} target="_blank" rel="noreferrer" className="mb-2 block">
                       {/* User uploads use dynamic Firebase URLs in this static export. */}
@@ -690,7 +700,7 @@ export function TaskDialog({
                       <img
                         src={attachment.url}
                         alt={attachment.name}
-                        className="max-h-80 w-full rounded-sm border border-steel-line bg-paper object-contain"
+                        className="max-h-80 w-full rounded-md bg-surface object-contain"
                         loading="lazy"
                       />
                     </a>
@@ -708,7 +718,7 @@ export function TaskDialog({
                 </div>
               ))}
               {pendingFiles.map((file, index) => (
-                <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded border border-dashed border-steel-line px-2.5 py-2 text-sm">
+                <div key={`${file.name}-${index}`} className="flex items-center gap-2 py-1 text-sm">
                   <span className="truncate flex-1">{file.name}</span>
                   <span className="text-[10px] text-steel">Uploads when the task is created</span>
                   <button type="button" onClick={() => setPendingFiles((current) => current.filter((_, i) => i !== index))} className="text-danger text-xs">Remove</button>

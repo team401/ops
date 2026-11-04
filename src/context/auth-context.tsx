@@ -12,6 +12,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { UserProfile, Subteam } from "@/types";
 import { registerDeviceSession, removeCurrentDeviceSession, watchDeviceRevocation } from "@/lib/device-sessions";
+import { coreUsesD1, fetchUser } from "@/lib/core-api";
 
 interface AuthContextValue {
   firebaseUser: User | null;
@@ -63,6 +64,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // by a coach show up live, without the student needing to re-login.
   useEffect(() => {
     if (!firebaseUser) return;
+    if (coreUsesD1()) {
+      let active = true;
+      let fallback = () => {};
+      const load = async () => {
+        try {
+          const nextProfile = await fetchUser(firebaseUser.uid);
+          if (active) { fallback(); fallback = () => {}; setActualProfile(nextProfile); setProfileLoading(false); }
+        } catch {
+          if (!active) return;
+          fallback();
+          fallback = onSnapshot(doc(db, "users", firebaseUser.uid), (snap) => {
+            setActualProfile(snap.exists() ? (snap.data() as UserProfile) : null);
+            setProfileLoading(false);
+          });
+        }
+      };
+      void load();
+      const interval = window.setInterval(load, 60_000);
+      window.addEventListener("ops:users-changed", load);
+      return () => { active = false; fallback(); window.clearInterval(interval); window.removeEventListener("ops:users-changed", load); };
+    }
     const ref = doc(db, "users", firebaseUser.uid);
     const unsub = onSnapshot(ref, (snap) => {
       const nextProfile = snap.exists() ? (snap.data() as UserProfile) : null;
@@ -82,6 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!simulationUid || actualProfile?.role !== "coach") {
       return;
+    }
+    if (coreUsesD1()) {
+      let active = true;
+      fetchUser(simulationUid).then((profile) => { if (active) setSimulatedProfile(profile); }).catch(() => stopSimulation());
+      return () => { active = false; };
     }
     return onSnapshot(doc(db, "users", simulationUid), (snap) => {
       if (snap.exists()) {

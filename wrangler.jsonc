@@ -1,0 +1,35 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "team401-ops-api",
+	"account_id": "ac881ac39e2d61290a9eab1414ec3131",
+	"main": "workers/api/src/index.ts",
+	"compatibility_date": "2026-11-03",
+	"workers_dev": true,
+	"routes": [
+		{
+			"pattern": "api.ops.team401.org",
+			"custom_domain": true
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"FIREBASE_PROJECT_ID": "team-401",
+		"ALLOWED_ORIGINS": "https://ops.team401.org,https://staging.ops.team401.org,http://localhost:3000",
+		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev"
+	},
+	"r2_buckets": [
+		{
+			"binding": "ATTACHMENTS",
+			"bucket_name": "team401-ops-attachments"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "team401-ops",
+			"database_id": "a2678adf-d1cd-4a21-8424-55180f5d6a95"
+		}
+	]
+}

@@ -9,6 +9,8 @@ import { doc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "fire
 import app, { db } from "@/lib/firebase";
 import type { Role, Subteam, UserProfile, Certification } from "@/types";
 import { assignAvailableTimeclockPin, removeTimeclockPin } from "@/lib/timeclock-actions";
+import { certificationsUseD1, createD1Certification, deleteD1Certification, fetchCertifications, updateD1Certification } from "@/lib/certification-api";
+import { coreUsesD1, deleteD1User, fetchUser, saveUser } from "@/lib/core-api";
 
 function randomTempPassword() {
   // Readable-ish temp password: e.g. "shop-4821-forge". Coach hands this to
@@ -60,13 +62,15 @@ export async function createAccount(input: CreateAccountInput) {
     try {
       // Written with the coach's own (still-authenticated, main-app)
       // Firestore instance, so these writes are subject to the normal rules.
-      await setDoc(doc(db, "users", uid), profile);
+      if (coreUsesD1()) await saveUser(profile);
+      else await setDoc(doc(db, "users", uid), profile);
       timeclockPin = await assignAvailableTimeclockPin(uid);
     } catch (firestoreError) {
       // Account creation is all-or-nothing from the UI's perspective. Remove
       // any partial PIN/profile/Auth records so retrying is safe.
       await removeTimeclockPin(uid).catch(() => {});
-      await deleteDoc(doc(db, "users", uid)).catch(() => {});
+      if (coreUsesD1()) await deleteD1User(uid).catch(() => {});
+      else await deleteDoc(doc(db, "users", uid)).catch(() => {});
       await deleteUser(cred.user).catch(() => {});
       throw firestoreError;
     }
@@ -82,6 +86,7 @@ export async function updateUserRoleAndSubteam(
   uid: string,
   changes: { role?: Role; subteam?: Subteam | null }
 ) {
+  if (coreUsesD1()) { const user = await fetchUser(uid); await saveUser({ ...user, ...changes }); return; }
   await updateDoc(doc(db, "users", uid), changes);
 }
 
@@ -91,16 +96,19 @@ export async function deleteUserProfile(uid: string) {
   // requires the Admin SDK to delete from a client app. If you need the
   // login itself fully revoked, remove the user from Authentication > Users
   // in the Firebase console as well.
+  if (coreUsesD1()) return deleteD1User(uid);
   await deleteDoc(doc(db, "users", uid));
 }
 
 export async function grantCertification(uid: string, certificationId: string) {
+  if (coreUsesD1()) { const user = await fetchUser(uid); await saveUser({ ...user, certificationIds: [...new Set([...user.certificationIds, certificationId])] }); return; }
   await updateDoc(doc(db, "users", uid), {
     certificationIds: arrayUnion(certificationId),
   });
 }
 
 export async function revokeCertification(uid: string, certificationId: string) {
+  if (coreUsesD1()) { const user = await fetchUser(uid); await saveUser({ ...user, certificationIds: user.certificationIds.filter((id) => id !== certificationId) }); return; }
   await updateDoc(doc(db, "users", uid), {
     certificationIds: arrayRemove(certificationId),
   });
@@ -109,6 +117,7 @@ export async function revokeCertification(uid: string, certificationId: string) 
 export async function createCertification(cert: Omit<Certification, "id">) {
   const ref = doc(db, "certifications", crypto.randomUUID());
   const full: Certification = { ...cert, id: ref.id };
+  if (certificationsUseD1()) return createD1Certification(full);
   await setDoc(ref, full);
   return full;
 }
@@ -117,9 +126,17 @@ export async function updateCertification(
   certId: string,
   changes: Partial<Omit<Certification, "id">>
 ) {
+  if (certificationsUseD1()) {
+    const current = await fetchCertifications();
+    const certification = current.find((item) => item.id === certId);
+    if (!certification) throw new Error("Certification not found.");
+    await updateD1Certification({ ...certification, ...changes });
+    return;
+  }
   await updateDoc(doc(db, "certifications", certId), changes);
 }
 
 export async function deleteCertification(certId: string) {
+  if (certificationsUseD1()) return deleteD1Certification(certId);
   await deleteDoc(doc(db, "certifications", certId));
 }

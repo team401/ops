@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
+import { certificationsUseD1, fetchCertifications } from "@/lib/certification-api";
+import { fetchCalendarEvents, fetchTimeEntries, fetchTimeclockPins, operationsUseD1 } from "@/lib/operations-api";
+import { coreUsesD1, fetchTasks, fetchUsers } from "@/lib/core-api";
 import type { Task, UserProfile, Certification, TimeEntry, TimeclockPin, InventoryItem, CalendarEvent } from "@/types";
 
 // These use onSnapshot directly (rather than one-shot fetches) so that when
@@ -19,6 +22,12 @@ export function useTasks() {
 
   useEffect(() => {
     if (!role) return;
+    if (coreUsesD1()) {
+      let active = true;
+      const load = () => fetchTasks().then((records) => { if (active) { setTasks(records.sort((a, b) => b.createdAt.localeCompare(a.createdAt))); setLoadedRole(role); } }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load(); const interval = window.setInterval(load, 20_000); window.addEventListener("ops:tasks-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:tasks-changed", load); };
+    }
     const source = role === "student"
       ? query(collection(db, "tasks"), where("leadersOnly", "==", false))
       : collection(db, "tasks");
@@ -64,6 +73,12 @@ export function useUsers() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (coreUsesD1()) {
+      let active = true;
+      const load = () => fetchUsers().then((records) => { if (active) setUsers(records); }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load(); const interval = window.setInterval(load, 60_000); window.addEventListener("ops:users-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:users-changed", load); };
+    }
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
       setUsers(snap.docs.map((d) => d.data() as UserProfile));
       setLoading(false);
@@ -79,6 +94,25 @@ export function useCertifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (certificationsUseD1()) {
+      let active = true;
+      const load = () => fetchCertifications().then((records) => {
+        if (active) setCertifications(records);
+      }).catch((error) => {
+        console.error("Could not load certifications from D1", error);
+      }).finally(() => { if (active) setLoading(false); });
+      void load();
+      const interval = window.setInterval(load, 60_000);
+      const handleFocus = () => { void load(); };
+      window.addEventListener("focus", handleFocus);
+      window.addEventListener("ops:certifications-changed", handleFocus);
+      return () => {
+        active = false;
+        window.clearInterval(interval);
+        window.removeEventListener("focus", handleFocus);
+        window.removeEventListener("ops:certifications-changed", handleFocus);
+      };
+    }
     const unsub = onSnapshot(collection(db, "certifications"), (snap) => {
       setCertifications(snap.docs.map((d) => d.data() as Certification));
       setLoading(false);
@@ -94,6 +128,14 @@ export function useCalendarEvents() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (operationsUseD1()) {
+      let active = true;
+      const load = () => fetchCalendarEvents().then((records) => { if (active) setEvents(records); }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load();
+      const interval = window.setInterval(load, 60_000);
+      window.addEventListener("ops:calendar-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:calendar-changed", load); };
+    }
     const source = query(collection(db, "calendarEvents"), orderBy("startDate", "asc"));
     return onSnapshot(source, (snapshot) => {
       setEvents(snapshot.docs.map((record) => record.data() as CalendarEvent));
@@ -112,6 +154,14 @@ export function useTimeEntries(scopeUid: string | null | undefined) {
 
   useEffect(() => {
     if (scopeUid === undefined) return;
+    if (operationsUseD1()) {
+      let active = true;
+      const load = () => fetchTimeEntries(scopeUid === null).then((records) => { if (active) setEntries(records.sort((a, b) => b.clockIn.localeCompare(a.clockIn))); }).catch(console.error).finally(() => { if (active) setLoading(false); });
+      void load();
+      const interval = window.setInterval(load, 30_000);
+      window.addEventListener("ops:time-changed", load);
+      return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:time-changed", load); };
+    }
     const source = scopeUid
       ? query(collection(db, "timeEntries"), where("uid", "==", scopeUid))
       : collection(db, "timeEntries");
@@ -134,6 +184,13 @@ export function useTimeclockPins(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
+    if (operationsUseD1()) {
+      let active = true;
+      const load = () => fetchTimeclockPins().then((records) => { if (active) setPins(records); }).catch(console.error);
+      void load();
+      window.addEventListener("ops:pins-changed", load);
+      return () => { active = false; window.removeEventListener("ops:pins-changed", load); };
+    }
     return onSnapshot(collection(db, "timeclockPins"), (snap) => {
       setPins(snap.docs.map((pin) => pin.data() as TimeclockPin));
     });
