@@ -43,7 +43,8 @@ async function usersRoute(request: Request, db: D1Database, actor: User, cors: H
 }
 
 async function tasksRoute(request: Request, db: D1Database, actor: User, cors: Headers) {
-  const id = decodeURIComponent(new URL(request.url).pathname.split("/")[2] ?? "");
+  const pathParts = new URL(request.url).pathname.split("/");
+  const id = decodeURIComponent(pathParts[2] ?? "");
   if (request.method === "GET" && !id) {
     const result = actor.role === "student"
       ? await db.prepare("SELECT data FROM tasks WHERE leaders_only = 0").all<{ data: string }>()
@@ -58,6 +59,14 @@ async function tasksRoute(request: Request, db: D1Database, actor: User, cors: H
   if (!idPattern.test(id)) throw new Error("Invalid task ID");
   const existing = await getTask(db, id); if (!existing) throw new Error("Not found");
   const manager = actor.role === "coach" || (actor.role === "student_leader" && actor.subteam === existing.subteam);
+  if (pathParts[3] === "attachments" && request.method === "POST") {
+    if (!manager && !existing.assigneeUids.includes(actor.uid)) throw new Error("Forbidden");
+    const attachment = await request.json<Record<string, unknown>>();
+    if (typeof attachment.id !== "string" || typeof attachment.url !== "string" || typeof attachment.storagePath !== "string") throw new Error("Invalid attachment");
+    const task = validateTask({ ...existing, attachments: [...existing.attachments, attachment], updatedAt: new Date().toISOString() });
+    await taskUpsert(db, task).run();
+    return json(task, 200, cors);
+  }
   if (request.method === "DELETE") { if (!manager) throw new Error("Forbidden"); await db.prepare("DELETE FROM tasks WHERE id = ?").bind(id).run(); return new Response(null, { status: 204, headers: cors }); }
   if (request.method === "PATCH") {
     const changes = await request.json<Record<string, unknown>>();
