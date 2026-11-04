@@ -9,11 +9,7 @@ on:
       - ".github/**"
       - "docs/**"
       - "workers/**"
-      - "migrations/**"
       - "**/*.md"
-      - "firestore.rules"
-      - "storage.rules"
-      - "wrangler.jsonc"
 
 permissions:
   contents: read

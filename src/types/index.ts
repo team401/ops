@@ -71,7 +71,7 @@ export interface TaskAttachment {
   name: string;
   url: string;
   storagePath: string;
-  storageProvider?: "firebase" | "r2";
+  storageProvider: "r2";
   contentType: string;
   size: number;
   uploadedByUid: string;
@@ -150,41 +150,4 @@ export interface TimeclockPin {
   uid: string;
   pin: string;
   updatedAt: string;
-}
-
-export type InventoryCategory = "gear" | "pulley" | "sprocket" | "belt";
-
-export interface InventorySpecs {
-  diametralPitch?: string;
-  beltProfile?: string;
-  widthMm?: string;
-  sided?: "single" | "double" | string;
-  toothCount?: number;
-  bore?: string;
-  chainSize?: string;
-  pitchLengthMm?: number;
-}
-
-export interface InventoryItem {
-  id: string;
-  category: InventoryCategory;
-  name: string;
-  quantity: number;
-  minimumQuantity: number;
-  location: string;
-  manufacturer: string;
-  partNumber: string;
-  vendorUrl: string;
-  notes: string;
-  specs: InventorySpecs;
-  createdBy: {
-    uid: string;
-    name: string;
-  };
-  updatedBy: {
-    uid: string;
-    name: string;
-  };
-  createdAt: Date | null;
-  updatedAt: Date | null;
 }

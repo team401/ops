@@ -8,11 +8,10 @@ import {
   ReactNode,
 } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut, User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import type { UserProfile, Subteam } from "@/types";
 import { registerDeviceSession, removeCurrentDeviceSession, watchDeviceRevocation } from "@/lib/device-sessions";
-import { coreUsesD1, fetchUser } from "@/lib/core-api";
+import { fetchUser } from "@/lib/core-api";
 
 interface AuthContextValue {
   firebaseUser: User | null;
@@ -60,34 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsub;
   }, []);
 
-  // Subscribe to the matching Firestore profile so role/cert changes made
-  // by a coach show up live, without the student needing to re-login.
+  // Refresh the D1 profile periodically so role/cert changes made by a coach
+  // appear without the student needing to sign in again.
   useEffect(() => {
     if (!firebaseUser) return;
-    if (coreUsesD1()) {
-      let active = true;
-      let fallback = () => {};
-      const load = async () => {
-        try {
-          const nextProfile = await fetchUser(firebaseUser.uid);
-          if (active) { fallback(); fallback = () => {}; setActualProfile(nextProfile); setProfileLoading(false); }
-        } catch {
-          if (!active) return;
-          fallback();
-          fallback = onSnapshot(doc(db, "users", firebaseUser.uid), (snap) => {
-            setActualProfile(snap.exists() ? (snap.data() as UserProfile) : null);
-            setProfileLoading(false);
-          });
-        }
-      };
-      void load();
-      const interval = window.setInterval(load, 60_000);
-      window.addEventListener("ops:users-changed", load);
-      return () => { active = false; fallback(); window.clearInterval(interval); window.removeEventListener("ops:users-changed", load); };
-    }
-    const ref = doc(db, "users", firebaseUser.uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      const nextProfile = snap.exists() ? (snap.data() as UserProfile) : null;
+    let active = true;
+    const load = () => fetchUser(firebaseUser.uid).then((nextProfile) => {
+      if (!active) return;
       setActualProfile(nextProfile);
       if (nextProfile?.role !== "coach") {
         setSimulatedProfile(null);
@@ -95,30 +73,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.sessionStorage.removeItem("ops-simulation-uid");
       }
       setProfileLoading(false);
-    });
-    return unsub;
+    }).catch(() => { if (active) setProfileLoading(false); });
+    void load();
+    const interval = window.setInterval(load, 60_000);
+    window.addEventListener("ops:users-changed", load);
+    return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:users-changed", load); };
   }, [firebaseUser]);
 
-  // Simulation changes presentation and UI permissions only. Firebase remains
-  // authenticated as the coach, so security rules continue to use the real user.
+  // Simulation changes presentation and UI permissions only. API authorization
+  // continues to use the real signed-in coach.
   useEffect(() => {
     if (!simulationUid || actualProfile?.role !== "coach") {
       return;
     }
-    if (coreUsesD1()) {
-      let active = true;
-      fetchUser(simulationUid).then((profile) => { if (active) setSimulatedProfile(profile); }).catch(() => stopSimulation());
-      return () => { active = false; };
-    }
-    return onSnapshot(doc(db, "users", simulationUid), (snap) => {
-      if (snap.exists()) {
-        setSimulatedProfile(snap.data() as UserProfile);
-      } else {
-        setSimulatedProfile(null);
-        setSimulationUid(null);
-        window.sessionStorage.removeItem("ops-simulation-uid");
-      }
-    });
+    let active = true;
+    fetchUser(simulationUid).then((profile) => { if (active) setSimulatedProfile(profile); }).catch(() => stopSimulation());
+    return () => { active = false; };
   }, [actualProfile?.role, simulationUid]);
 
   useEffect(() => {

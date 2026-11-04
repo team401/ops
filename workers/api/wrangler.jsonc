@@ -1,8 +1,8 @@
 {
-	"$schema": "./node_modules/wrangler/config-schema.json",
+	"$schema": "../../node_modules/wrangler/config-schema.json",
 	"name": "team401-ops-api",
 	"account_id": "ac881ac39e2d61290a9eab1414ec3131",
-	"main": "workers/api/src/index.ts",
+	"main": "src/index.ts",
 	"compatibility_date": "2026-11-03",
 	"workers_dev": true,
 	"routes": [
@@ -29,7 +29,8 @@
 		{
 			"binding": "DB",
 			"database_name": "team401-ops",
-			"database_id": "a2678adf-d1cd-4a21-8424-55180f5d6a95"
+			"database_id": "a2678adf-d1cd-4a21-8424-55180f5d6a95",
+			"migrations_dir": "migrations"
 		}
 	]
 }

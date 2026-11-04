@@ -8,9 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "worker:check": "tsc -p workers/api/tsconfig.json",
-    "worker:dev": "wrangler dev",
-    "worker:deploy": "wrangler deploy",
-    "d1:migrate": "wrangler d1 migrations apply team401-ops --remote"
+    "worker:dev": "wrangler dev --config workers/api/wrangler.jsonc",
+    "worker:deploy": "wrangler deploy --config workers/api/wrangler.jsonc",
+    "d1:migrate": "wrangler d1 migrations apply team401-ops --remote --config workers/api/wrangler.jsonc"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

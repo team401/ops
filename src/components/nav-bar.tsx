@@ -44,7 +44,6 @@ export function NavBar() {
     { href: "https://partexporter.app/dashboard/", label: "Parts", external: true },
     { href: "https://scout.team401.org", label: "Scouting", external: true },
     { href: "https://battery.team401.org", label: "Batteries", external: true },
-    { href: "/inventory", label: "Inventory" },
     { href: "/certifications", label: "Certifications" },
     ...(isCoach ? [{ href: "/metrics", label: "Metrics" }] : []),
     ...(isCoach ? [{ href: "/admin", label: "Admin" }] : []),
