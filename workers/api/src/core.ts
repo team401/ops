@@ -16,6 +16,7 @@ export async function handleCore(request: Request, env: CoreEnv, uid: string, to
     if (path === "/users" || path.startsWith("/users/")) return usersRoute(request, env.DB, profile, cors);
     return tasksRoute(request, env.DB, profile, cors);
   } catch (error) {
+    console.error("Core API request failed", error);
     const message = error instanceof Error ? error.message : "Data request failed";
     const status = message === "Forbidden" ? 403 : message === "Not found" ? 404 : message.startsWith("Invalid") ? 400 : 500;
     return json({ error: status === 500 ? "Data request failed" : message }, status, cors);
@@ -59,6 +60,13 @@ async function tasksRoute(request: Request, db: D1Database, actor: User, cors: H
   if (!idPattern.test(id)) throw new Error("Invalid task ID");
   const existing = await getTask(db, id); if (!existing) throw new Error("Not found");
   const manager = actor.role === "coach" || (actor.role === "student_leader" && actor.subteam === existing.subteam);
+  if (pathParts[3] === "comments" && request.method === "POST") {
+    const comment = await request.json<Record<string, unknown>>();
+    if (typeof comment.id !== "string" || !idPattern.test(comment.id) || typeof comment.body !== "string" || !comment.body.trim() || comment.body.length > 2000 || comment.authorUid !== actor.uid || typeof comment.createdAt !== "string") throw new Error("Invalid comment");
+    const task = validateTask({ ...existing, comments: [...existing.comments, { ...comment, body: comment.body.trim() }], updatedAt: comment.createdAt });
+    await taskUpsert(db, task).run();
+    return json(task, 200, cors);
+  }
   if (pathParts[3] === "attachments" && request.method === "POST") {
     if (!manager && !existing.assigneeUids.includes(actor.uid)) throw new Error("Forbidden");
     const attachment = await request.json<Record<string, unknown>>();

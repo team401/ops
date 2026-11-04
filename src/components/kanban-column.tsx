@@ -33,7 +33,7 @@ export function KanbanColumn({
   const meta = STATUS_META[status];
 
   return (
-    <div className="flex w-full flex-col xl:h-[calc(100dvh-10rem)] xl:min-h-[360px] xl:min-w-[240px] xl:flex-1 xl:shrink-0">
+    <div className="flex w-full flex-col xl:min-h-0 xl:min-w-[240px] xl:flex-1 xl:shrink-0">
       <button
         type="button"
         onClick={onToggleCollapsed}

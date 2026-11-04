@@ -100,7 +100,7 @@ export function KanbanBoard({
   const canCreateHere = editableSubteams.length > 0;
 
   return (
-    <div>
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {toolbar && <div className="flex flex-wrap items-center gap-1.5">{toolbar}</div>}
         <p className={`${toolbar ? "ml-1" : ""} whitespace-nowrap text-sm text-steel`}>
@@ -119,7 +119,7 @@ export function KanbanBoard({
       {dragError && <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"><span>{dragError}</span><button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold">Dismiss</button></div>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 gap-2 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto xl:pb-0">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn
               key={status}
