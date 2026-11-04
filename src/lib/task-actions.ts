@@ -11,7 +11,7 @@ import {
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import type { Task, TaskStatus, TaskHistoryEntry, TaskComment, TaskAttachment } from "@/types";
-import { appendD1TaskAttachment, coreUsesD1, createD1Task, deleteD1Task, fetchTasks, patchD1Task } from "@/lib/core-api";
+import { appendD1TaskAttachment, appendD1TaskComment, coreUsesD1, createD1Task, deleteD1Task, fetchTasks, patchD1Task } from "@/lib/core-api";
 
 async function currentTask(taskId: string) { const task = (await fetchTasks()).find((item) => item.id === taskId); if (!task) throw new Error("Task not found."); return task; }
 
@@ -56,7 +56,7 @@ export async function addTaskComment(taskId: string, body: string, authorUid: st
     authorUid,
     createdAt: new Date().toISOString(),
   };
-  if (coreUsesD1()) { const task = await currentTask(taskId); await patchD1Task(taskId, { comments: [...task.comments, comment], updatedAt: comment.createdAt }); return comment; }
+  if (coreUsesD1()) { await appendD1TaskComment(taskId, comment); return comment; }
   await updateDoc(doc(db, "tasks", taskId), {
     comments: arrayUnion(comment),
     updatedAt: comment.createdAt,
