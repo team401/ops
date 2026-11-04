@@ -196,8 +196,9 @@ export function TaskDialog({
         }
       }
       onClose();
-    } catch {
-      setError("Something went wrong saving this task. Try again.");
+    } catch (caught) {
+      console.error("Task save failed", caught);
+      setError(caught instanceof Error ? caught.message : "Something went wrong saving this task. Try again.");
     } finally {
       setSubmitting(false);
     }

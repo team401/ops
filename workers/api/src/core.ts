@@ -16,6 +16,7 @@ export async function handleCore(request: Request, env: CoreEnv, uid: string, to
     if (path === "/users" || path.startsWith("/users/")) return usersRoute(request, env.DB, profile, cors);
     return tasksRoute(request, env.DB, profile, cors);
   } catch (error) {
+    console.error("Core API request failed", error);
     const message = error instanceof Error ? error.message : "Data request failed";
     const status = message === "Forbidden" ? 403 : message === "Not found" ? 404 : message.startsWith("Invalid") ? 400 : 500;
     return json({ error: status === 500 ? "Data request failed" : message }, status, cors);
