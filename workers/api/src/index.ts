@@ -253,8 +253,9 @@ function isAllowedOrigin(origin: string, env: Env) {
   if (exactOrigins.includes(origin)) return true;
   try {
     const url = new URL(origin);
-    return url.protocol === "https:" && Boolean(env.PAGES_HOST_SUFFIX) &&
-      (url.hostname === env.PAGES_HOST_SUFFIX || url.hostname.endsWith(`.${env.PAGES_HOST_SUFFIX}`));
+    const pageHostSuffixes = env.PAGES_HOST_SUFFIX.split(",").map((value) => value.trim()).filter(Boolean);
+    return url.protocol === "https:" && pageHostSuffixes.some((suffix) =>
+      url.hostname === suffix || url.hostname.endsWith(`.${suffix}`));
   } catch {
     return false;
   }
