@@ -13,7 +13,7 @@ export function SubteamBoardClient({ subteam }: { subteam: Subteam }) {
   const meta = SUBTEAM_META[subteam];
 
   return (
-    <AppShell>
+    <AppShell lockDesktopViewport>
       <div className="mb-5 flex items-center gap-2">
         <span
           className="w-2.5 h-2.5 rounded-full inline-block"
