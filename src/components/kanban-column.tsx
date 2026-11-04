@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Task, TaskStatus, Certification, UserProfile } from "@/types";
@@ -24,10 +25,11 @@ interface KanbanColumnProps {
   onToggleCollapsed: () => void;
   shouldCollapseCard: (task: Task) => boolean;
   draggable: boolean;
+  dropPreview: { task: Task | null; index: number } | null;
 }
 
 export function KanbanColumn({
-  status, tasks, allTasks, certifications, users, onOpenTask, collapsed, onToggleCollapsed, shouldCollapseCard, draggable,
+  status, tasks, allTasks, certifications, users, onOpenTask, collapsed, onToggleCollapsed, shouldCollapseCard, draggable, dropPreview,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const meta = STATUS_META[status];
@@ -46,19 +48,30 @@ export function KanbanColumn({
       </button>
       <div
         ref={setNodeRef}
-        className={`${collapsed ? "hidden md:block" : "block"} min-h-[120px] flex-1 rounded-lg border border-dashed p-1.5 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver ? "border-blueprint bg-blueprint/5" : "border-steel-line/60"
+        className={`${collapsed ? "hidden md:block" : "block"} min-h-[120px] flex-1 rounded-lg border border-dashed p-1.5 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver || dropPreview ? "border-blueprint bg-blueprint/10 ring-2 ring-inset ring-blueprint/20" : "border-steel-line/60"
           }`}
       >
         <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-1.5">
-            {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} tasks={allTasks} certifications={certifications} users={users}
+            {tasks.map((task, index) => <Fragment key={task.id}>
+              {dropPreview?.task && dropPreview.index === index && <TaskDropPreview task={dropPreview.task} users={users} />}
+              <TaskCard task={task} tasks={allTasks} certifications={certifications} users={users}
                 draggable={draggable && !task.archived} defaultCollapsed={shouldCollapseCard(task)} onOpen={() => onOpenTask(task)} />
-            ))}
+            </Fragment>)}
+            {dropPreview?.task && dropPreview.index >= tasks.length && <TaskDropPreview task={dropPreview.task} users={users} />}
           </div>
         </SortableContext>
-        {tasks.length === 0 && <p className="text-xs text-steel/60 text-center py-6">Nothing here</p>}
+        {tasks.length === 0 && !dropPreview && <p className="text-xs text-steel/60 text-center py-6">Nothing here</p>}
       </div>
     </div>
   );
+}
+
+function TaskDropPreview({ task, users }: { task: Task; users: UserProfile[] }) {
+  const assignees = users.filter((user) => task.assigneeUids.includes(user.uid));
+  return <div aria-hidden="true" className="mb-1.5 rounded-lg border-2 border-dashed border-blueprint bg-blueprint/12 px-3 py-2.5 text-ink opacity-75 shadow-inner">
+    <p className="text-[10px] font-bold uppercase tracking-wide text-blueprint">Drop here</p>
+    <p className="mt-1 break-words text-sm font-semibold leading-snug">{task.title}</p>
+    <p className="mt-1 text-[10px] text-steel">{assignees.length > 0 ? assignees.map((user) => user.displayName).join(", ") : "Unclaimed"}</p>
+  </div>;
 }

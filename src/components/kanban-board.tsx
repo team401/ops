@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { DndContext, DragEndEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { Search } from "lucide-react";
-import { arrayMove } from "@dnd-kit/sortable";
 import type { Task, TaskStatus, Subteam, Certification, UserProfile } from "@/types";
 import { TASK_STATUSES } from "@/types";
 import { KanbanColumn } from "@/components/kanban-column";
@@ -38,6 +37,7 @@ export function KanbanBoard({
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [dragError, setDragError] = useState<string | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ taskId: string; status: TaskStatus; index: number } | null>(null);
   const cardDefault = useSyncExternalStore(subscribeCardDefault, getCardDefault, () => "collapsed");
   const [collapsedColumns, setCollapsedColumns] = useState<Set<TaskStatus>>(new Set());
   // Mouse: drag starts after a small movement, same as before. Touch: drag
@@ -64,13 +64,44 @@ export function KanbanBoard({
     });
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const task = scopedTasks.find((candidate) => candidate.id === event.active.id);
+    if (!task) return;
+    setDragPreview({ taskId: task.id, status: task.status, index: tasksFor(task.status).findIndex((candidate) => candidate.id === task.id) });
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const task = scopedTasks.find((candidate) => candidate.id === event.active.id);
+    if (!task || !event.over) return;
+    const overTask = scopedTasks.find((candidate) => candidate.id === event.over?.id);
+    const status = overTask?.status ?? event.over.data.current?.status ?? event.over.id as TaskStatus;
+    if (!TASK_STATUSES.includes(status)) return;
+
+    const destinationTasks = tasksFor(status).filter((candidate) => candidate.id !== task.id);
+    if (!overTask || overTask.id === task.id) {
+      const originalIndex = tasksFor(status).findIndex((candidate) => candidate.id === task.id);
+      setDragPreview({ taskId: task.id, status, index: originalIndex < 0 ? destinationTasks.length : Math.min(originalIndex, destinationTasks.length) });
+      return;
+    }
+
+    const overIndex = destinationTasks.findIndex((candidate) => candidate.id === overTask.id);
+    const translatedRect = event.active.rect.current.translated;
+    const belowOverTask = translatedRect ? translatedRect.top + translatedRect.height / 2 > event.over.rect.top + event.over.rect.height / 2 : false;
+    setDragPreview({ taskId: task.id, status, index: Math.max(0, overIndex + (belowOverTask ? 1 : 0)) });
+  }
+
+  function handleDragCancel() {
+    setDragPreview(null);
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over) return;
+    const preview = dragPreview;
+    setDragPreview(null);
+    if (!over || !preview) return;
     const task = scopedTasks.find((t) => t.id === active.id);
     if (!task) return;
-    const overTask = scopedTasks.find((candidate) => candidate.id === over.id);
-    const newStatus = overTask?.status ?? over.data.current?.status ?? over.id as TaskStatus;
+    const newStatus = preview.status;
     if (!TASK_STATUSES.includes(newStatus)) return;
     try {
       if (["in_progress", "review", "done"].includes(newStatus)) {
@@ -79,15 +110,13 @@ export function KanbanBoard({
       }
       const updates: Array<{ id: string; status: TaskStatus; order: number }> = [];
       if (task.status === newStatus) {
-        const column = tasksFor(newStatus);
-        const oldIndex = column.findIndex((item) => item.id === task.id);
-        const newIndex = overTask ? column.findIndex((item) => item.id === overTask.id) : column.length - 1;
-        arrayMove(column, oldIndex, Math.max(0, newIndex)).forEach((item, index) => updates.push({ id: item.id, status: newStatus, order: (index + 1) * 1000 }));
+        const column = tasksFor(newStatus).filter((item) => item.id !== task.id);
+        column.splice(Math.min(preview.index, column.length), 0, task);
+        column.forEach((item, index) => updates.push({ id: item.id, status: newStatus, order: (index + 1) * 1000 }));
       } else {
         const oldColumn = tasksFor(task.status).filter((item) => item.id !== task.id);
         const newColumn = tasksFor(newStatus);
-        const overIndex = overTask ? newColumn.findIndex((item) => item.id === overTask.id) : -1;
-        newColumn.splice(overIndex < 0 ? newColumn.length : overIndex, 0, { ...task, status: newStatus });
+        newColumn.splice(Math.min(preview.index, newColumn.length), 0, { ...task, status: newStatus });
         oldColumn.forEach((item, index) => updates.push({ id: item.id, status: task.status, order: (index + 1) * 1000 }));
         newColumn.forEach((item, index) => updates.push({ id: item.id, status: newStatus, order: (index + 1) * 1000 }));
       }
@@ -118,7 +147,7 @@ export function KanbanBoard({
       </div>
       {dragError && <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"><span>{dragError}</span><button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold">Dismiss</button></div>}
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd}>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto xl:pb-0">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn
@@ -137,6 +166,7 @@ export function KanbanBoard({
               })}
               shouldCollapseCard={(task) => cardDefault === "collapsed" && !task.assigneeUids.includes(profile?.uid ?? "")}
               draggable={!search.trim()}
+              dropPreview={dragPreview?.status === status ? { task: scopedTasks.find((task) => task.id === dragPreview.taskId) ?? null, index: dragPreview.index } : null}
             />
           ))}
         </div>
