@@ -16,7 +16,7 @@ export default function BoardPage() {
   const editableSubteams = SUBTEAMS;
 
   return (
-    <AppShell>
+    <AppShell lockDesktopViewport>
       <KanbanBoard
         tasks={tasks}
         certifications={certifications}

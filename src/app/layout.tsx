@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | 401 Ops",
   },
   description:
-    "Team 401's operations hub for projects, people, attendance, and inventory",
+    "Team 401's operations hub for projects, people, and attendance",
 
   icons: {
     apple: withBasePath("/apple-touch-icon.png"),

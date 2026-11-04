@@ -695,7 +695,7 @@ export function TaskDialog({
                 <div key={attachment.id} className="text-sm">
                   {attachment.contentType.startsWith("image/") && (
                     <a href={attachment.url} target="_blank" rel="noreferrer" className="mb-2 block">
-                      {/* User uploads use dynamic Firebase URLs in this static export. */}
+                      {/* Attachments are served from the authenticated R2-backed API. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={attachment.url}

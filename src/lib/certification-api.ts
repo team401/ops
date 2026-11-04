@@ -5,10 +5,6 @@ function apiUrl() {
   return process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
 }
 
-export function certificationsUseD1() {
-  return Boolean(apiUrl());
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = apiUrl();
   const token = await auth.currentUser?.getIdToken();
@@ -46,10 +42,4 @@ export async function updateD1Certification(certification: Certification) {
 export async function deleteD1Certification(id: string) {
   await request<void>(`/certifications/${encodeURIComponent(id)}`, { method: "DELETE" });
   notifyCertificationChange();
-}
-
-export async function migrateCertificationsToD1() {
-  const result = await request<{ copied: number; verified: number; d1Count: number }>("/migrations/certifications", { method: "POST" });
-  notifyCertificationChange();
-  return result;
 }

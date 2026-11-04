@@ -12,22 +12,10 @@ interface Env {
   PAGES_HOST_SUFFIX: string;
 }
 
-interface FirestoreDocument {
-  fields?: Record<string, FirestoreValue>;
-}
-
-interface FirestoreValue {
-  stringValue?: string;
-  booleanValue?: boolean;
-  arrayValue?: { values?: FirestoreValue[] };
-  mapValue?: { fields?: Record<string, FirestoreValue> };
-}
-
 const firebaseKeys = createRemoteJWKSet(
   new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
 );
 const attachmentRoute = /^\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
-const attachmentMigrationRoute = /^\/migrations\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
 const certificationRoute = /^\/certifications(?:\/([^/]+))?$/;
 const maxAttachmentSize = 20 * 1024 * 1024;
 
@@ -52,7 +40,7 @@ export default {
       try {
         const token = bearerToken(request);
         const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
-        return handleCore(request, env, uid, token, cors);
+        return handleCore(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Data request failed");
       }
@@ -62,33 +50,9 @@ export default {
       try {
         const token = bearerToken(request);
         const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
-        return handleOperations(request, env, uid, token, cors);
+        return handleOperations(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Data request failed");
-      }
-    }
-
-    if (url.pathname === "/migrations/certifications") {
-      if (request.method !== "POST") return methodNotAllowed(cors, "POST, OPTIONS");
-      try {
-        const token = bearerToken(request);
-        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
-        await requireCoach(uid, token, env);
-        const documents = await fetchFirestoreCollection("certifications", token, env.FIREBASE_PROJECT_ID);
-        const certifications = documents.map(parseFirestoreCertification);
-        if (certifications.length > 0) {
-          await env.DB.batch(certifications.map((certification) => certificationUpsert(env.DB, certification)));
-        }
-        const rows = await env.DB.prepare("SELECT id, name, description, subteam FROM certifications").all<CertificationRow>();
-        const byId = new Map(rows.results.map((row) => [row.id, row]));
-        const verified = certifications.every((certification) => {
-          const row = byId.get(certification.id);
-          return row?.name === certification.name && row.description === certification.description && row.subteam === certification.subteam;
-        });
-        if (!verified) return json({ error: "D1 verification failed" }, 500, cors);
-        return json({ copied: certifications.length, verified: certifications.length, d1Count: rows.results.length }, 200, cors);
-      } catch (error) {
-        return authenticatedError(error, cors, "Certification migration failed");
       }
     }
 
@@ -102,7 +66,7 @@ export default {
           const result = await env.DB.prepare("SELECT id, name, description, subteam FROM certifications ORDER BY name COLLATE NOCASE").all<CertificationRow>();
           return json(result.results, 200, cors);
         }
-        await requireCoach(uid, token, env);
+        await requireCoach(uid, env);
         if (request.method === "POST" && !certificationMatch[1]) {
           const certification = validateCertification(await request.json());
           await certificationUpsert(env.DB, certification).run();
@@ -122,65 +86,6 @@ export default {
         return methodNotAllowed(cors, certificationMatch[1] ? "PUT, DELETE, OPTIONS" : "GET, POST, OPTIONS");
       } catch (error) {
         return authenticatedError(error, cors, "Certification request failed");
-      }
-    }
-
-    const migrationMatch = url.pathname.match(attachmentMigrationRoute);
-    if (migrationMatch) {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405, headers: { ...Object.fromEntries(cors), Allow: "POST, OPTIONS" } });
-      }
-      try {
-        const token = bearerToken(request);
-        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
-        const profile = await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
-        if (profile.fields?.role?.stringValue !== "coach") throw new Error("Forbidden");
-
-        const [, encodedTaskId, encodedAttachmentId, encodedFileName] = migrationMatch;
-        const taskId = decodeURIComponent(encodedTaskId);
-        const attachmentId = decodeURIComponent(encodedAttachmentId);
-        const fileName = decodeURIComponent(encodedFileName);
-        validateAttachmentPath(taskId, attachmentId, fileName);
-        const task = await fetchFirestoreDocument("tasks", taskId, token, env.FIREBASE_PROJECT_ID);
-        const attachment = findLegacyAttachment(task, attachmentId);
-        if (!attachment) return json({ error: "Legacy attachment not found" }, 404, cors);
-        const sourceUrl = attachment.url;
-        const storagePath = attachment.storagePath;
-        if (!sourceUrl || !storagePath?.startsWith(`task-attachments/${taskId}/`)) {
-          return json({ error: "Attachment source is invalid" }, 400, cors);
-        }
-        const source = new URL(sourceUrl);
-        if (!isFirebaseStorageHost(source.hostname)) {
-          return json({ error: "Attachment is not hosted by Firebase Storage" }, 400, cors);
-        }
-
-        const sourceResponse = await fetch(source);
-        if (!sourceResponse.ok) return json({ error: "Could not download the Firebase attachment" }, 502, cors);
-        const bytes = await sourceResponse.arrayBuffer();
-        if (bytes.byteLength > maxAttachmentSize) return json({ error: "Attachments must be 20 MB or smaller" }, 413, cors);
-        const sha256 = await digestHex(bytes);
-        const key = `task-attachments/${taskId}/${attachmentId}/${fileName}`;
-        const contentType = attachment.contentType || sourceResponse.headers.get("Content-Type") || "application/octet-stream";
-        await env.ATTACHMENTS.put(key, bytes, {
-          httpMetadata: { contentType, cacheControl: "public,max-age=31536000,immutable", contentDisposition: "inline" },
-          customMetadata: { taskId, attachmentId, uploadedByUid: uid, migratedFrom: "firebase", sha256 },
-        });
-        const copied = await env.ATTACHMENTS.get(key);
-        if (!copied || copied.size !== bytes.byteLength || await digestHex(await copied.arrayBuffer()) !== sha256) {
-          await env.ATTACHMENTS.delete(key);
-          return json({ error: "R2 verification failed" }, 500, cors);
-        }
-        return json({
-          key,
-          url: new URL(`/attachments/${encodeURIComponent(taskId)}/${encodeURIComponent(attachmentId)}/${encodeURIComponent(fileName)}`, request.url).href,
-          size: bytes.byteLength,
-          contentType,
-          sha256,
-        }, 201, cors);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Migration failed";
-        const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
-        return json({ error: status === 500 ? "Attachment migration failed" : message }, status, cors);
       }
     }
 
@@ -213,14 +118,7 @@ export default {
       const token = bearerToken(request);
       const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
       const [task, profile] = await Promise.all([fetchD1Task(env.DB, taskId), fetchD1Profile(env.DB, uid)]);
-      let authorized = Boolean(task && profile && canChangeAttachments(uid, task, profile));
-      if (!task || !profile) {
-        const [firestoreTask, firestoreProfile] = await Promise.all([
-          fetchFirestoreDocument("tasks", taskId, token, env.FIREBASE_PROJECT_ID),
-          fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID),
-        ]);
-        authorized = canChangeFirestoreAttachments(uid, firestoreTask, firestoreProfile);
-      }
+      const authorized = Boolean(task && profile && canChangeAttachments(uid, task, profile));
       if (!authorized) {
         return json({ error: "You cannot change attachments on this task" }, 403, cors);
       }
@@ -311,41 +209,9 @@ async function verifyFirebaseToken(token: string, projectId: string) {
   return payload.sub;
 }
 
-async function fetchFirestoreDocument(collection: string, id: string, token: string, projectId: string) {
-  const response = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/${collection}/${encodeURIComponent(id)}`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (response.status === 401) throw new Error("Unauthorized");
-  if (!response.ok) throw new Error("Forbidden");
-  return response.json<FirestoreDocument>();
-}
-
-async function fetchFirestoreCollection(collection: string, token: string, projectId: string) {
-  const response = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/${collection}?pageSize=1000`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (response.status === 401) throw new Error("Unauthorized");
-  if (!response.ok) throw new Error("Forbidden");
-  const result = await response.json<{ documents?: Array<FirestoreDocument & { name?: string }> }>();
-  return result.documents ?? [];
-}
-
-function parseFirestoreCertification(document: FirestoreDocument & { name?: string }) {
-  return validateCertification({
-    id: document.fields?.id?.stringValue ?? document.name?.split("/").at(-1),
-    name: document.fields?.name?.stringValue,
-    description: document.fields?.description?.stringValue ?? "",
-    subteam: document.fields?.subteam?.stringValue ?? null,
-  });
-}
-
-async function requireCoach(uid: string, token: string, env: Env) {
+async function requireCoach(uid: string, env: Env) {
   const profile = await fetchD1Profile(env.DB, uid);
-  if (profile) { if (profile.role !== "coach") throw new Error("Forbidden"); return; }
-  const fallback = await fetchFirestoreDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
-  if (fallback.fields?.role?.stringValue !== "coach") throw new Error("Forbidden");
+  if (profile?.role !== "coach") throw new Error("Forbidden");
 }
 
 function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUids?: string[] }, profile: { role?: string; subteam?: string | null }) {
@@ -354,16 +220,6 @@ function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUid
   const taskSubteam = task.subteam;
   const assignees = task.assigneeUids ?? [];
   return role === "coach" || (role === "student_leader" && profileSubteam === taskSubteam) || assignees.includes(uid);
-}
-
-function canChangeFirestoreAttachments(uid: string, task: FirestoreDocument, profile: FirestoreDocument) {
-  return canChangeAttachments(uid, {
-    subteam: task.fields?.subteam?.stringValue,
-    assigneeUids: task.fields?.assigneeUids?.arrayValue?.values?.flatMap((value) => value.stringValue ? [value.stringValue] : []) ?? [],
-  }, {
-    role: profile.fields?.role?.stringValue,
-    subteam: profile.fields?.subteam?.stringValue ?? null,
-  });
 }
 
 async function fetchD1Task(db: D1Database, id: string) {
@@ -379,30 +235,6 @@ function validateAttachmentPath(taskId: string, attachmentId: string, fileName: 
   if (!/^[A-Za-z0-9_-]+$/.test(taskId) || !/^[A-Za-z0-9_-]+$/.test(attachmentId) || !/^[A-Za-z0-9._-]+$/.test(fileName)) {
     throw new Error("Invalid attachment path");
   }
-}
-
-function findLegacyAttachment(task: FirestoreDocument, attachmentId: string) {
-  const values = task.fields?.attachments?.arrayValue?.values ?? [];
-  for (const value of values) {
-    const fields = value.mapValue?.fields;
-    if (fields?.id?.stringValue === attachmentId && fields.storageProvider?.stringValue !== "r2") {
-      return {
-        url: fields.url?.stringValue,
-        storagePath: fields.storagePath?.stringValue,
-        contentType: fields.contentType?.stringValue,
-      };
-    }
-  }
-  return null;
-}
-
-function isFirebaseStorageHost(hostname: string) {
-  return hostname === "firebasestorage.googleapis.com" || hostname === "storage.googleapis.com";
-}
-
-async function digestHex(bytes: ArrayBuffer) {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function corsHeaders(origin: string | null, env: Env) {
@@ -421,8 +253,9 @@ function isAllowedOrigin(origin: string, env: Env) {
   if (exactOrigins.includes(origin)) return true;
   try {
     const url = new URL(origin);
-    return url.protocol === "https:" && Boolean(env.PAGES_HOST_SUFFIX) &&
-      (url.hostname === env.PAGES_HOST_SUFFIX || url.hostname.endsWith(`.${env.PAGES_HOST_SUFFIX}`));
+    const pageHostSuffixes = env.PAGES_HOST_SUFFIX.split(",").map((value) => value.trim()).filter(Boolean);
+    return url.protocol === "https:" && pageHostSuffixes.some((suffix) =>
+      url.hostname === suffix || url.hostname.endsWith(`.${suffix}`));
   } catch {
     return false;
   }
