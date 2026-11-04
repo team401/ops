@@ -231,14 +231,18 @@ export default {
       }
 
       const contentLengthHeader = request.headers.get("Content-Length");
-      if (contentLengthHeader === null) return json({ error: "Content-Length is required" }, 411, cors);
-      const contentLength = Number(contentLengthHeader);
-      if (!Number.isFinite(contentLength) || contentLength < 0 || contentLength > maxAttachmentSize) {
+      const declaredLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
+      if (declaredLength !== null && (!Number.isFinite(declaredLength) || declaredLength < 0 || declaredLength > maxAttachmentSize)) {
         return json({ error: "Attachments must be 20 MB or smaller" }, 413, cors);
       }
       if (!request.body) return json({ error: "Missing file body" }, 400, cors);
 
-      await env.ATTACHMENTS.put(key, request.body, {
+      const bytes = await request.arrayBuffer();
+      if (bytes.byteLength > maxAttachmentSize) {
+        return json({ error: "Attachments must be 20 MB or smaller" }, 413, cors);
+      }
+
+      await env.ATTACHMENTS.put(key, bytes, {
         httpMetadata: {
           contentType: request.headers.get("Content-Type") ?? "application/octet-stream",
           cacheControl: "public,max-age=31536000,immutable",
