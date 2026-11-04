@@ -1,0 +1,91 @@
+name: Record Cloudflare deployments
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+    paths-ignore:
+      - ".github/**"
+      - "docs/**"
+      - "workers/**"
+      - "migrations/**"
+      - "**/*.md"
+      - "firestore.rules"
+      - "storage.rules"
+      - "wrangler.jsonc"
+
+permissions:
+  contents: read
+  checks: read
+  deployments: write
+
+concurrency:
+  group: cloudflare-deployment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record successful Cloudflare Pages deployment
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const branch = context.ref.replace("refs/heads/", "");
+            const production = branch === "main";
+            const project = production ? "ops" : "ops-staging";
+            const checkName = `Cloudflare Pages: ${project}`;
+            const environment = production ? "production" : "staging";
+            const environmentUrl = production
+              ? "https://ops.team401.org"
+              : "https://staging.ops.team401.org";
+
+            let cloudflareCheck;
+            for (let attempt = 0; attempt < 60; attempt += 1) {
+              const response = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: context.sha,
+                per_page: 100,
+              });
+              cloudflareCheck = response.data.check_runs.find((check) => check.name === checkName);
+              if (cloudflareCheck?.status === "completed") break;
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+
+            if (!cloudflareCheck || cloudflareCheck.status !== "completed") {
+              core.setFailed(`${checkName} did not complete within 10 minutes.`);
+              return;
+            }
+
+            const deploymentState = cloudflareCheck.conclusion === "success" ? "success" : "failure";
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment,
+              description: `${checkName} deployment`,
+              auto_merge: false,
+              required_contexts: [],
+              production_environment: production,
+              transient_environment: false,
+            });
+
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: deploymentState,
+              environment,
+              environment_url: environmentUrl,
+              log_url: cloudflareCheck.details_url ?? undefined,
+              description: deploymentState === "success"
+                ? "Cloudflare Pages deployment succeeded"
+                : `Cloudflare Pages deployment ${cloudflareCheck.conclusion ?? "failed"}`,
+              auto_inactive: true,
+            });
+
+            if (deploymentState !== "success") {
+              core.setFailed(`${checkName} concluded with ${cloudflareCheck.conclusion}.`);
+            }
