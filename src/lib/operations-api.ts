@@ -2,7 +2,6 @@ import { auth } from "@/lib/firebase";
 import type { CalendarEvent, TimeEntry, TimeclockActivity, TimeclockPin } from "@/types";
 
 const baseUrl = () => process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
-export const operationsUseD1 = () => Boolean(baseUrl());
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await auth.currentUser?.getIdToken();
@@ -34,5 +33,3 @@ export const fetchDeviceSessions = () => request<D1DeviceSession[]>("/device-ses
 export const registerD1Device = (id: string, label: string, userAgent: string) => request<void>(`/device-sessions/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ label, userAgent }) });
 export const revokeD1Device = (id: string) => request<void>(`/device-sessions/${encodeURIComponent(id)}`, { method: "POST" });
 export const deleteD1Device = (id: string) => request<void>(`/device-sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
-
-export const migrateOperationsToD1 = () => request<{ copied: Record<string, number>; verified: Record<string, number>; deviceSessions: string }>("/migrations/operations", { method: "POST" });

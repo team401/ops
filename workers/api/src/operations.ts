@@ -1,21 +1,18 @@
 /// <reference types="@cloudflare/workers-types" />
 
-interface OperationsEnv { DB: D1Database; FIREBASE_PROJECT_ID: string }
-interface FirestoreValue { stringValue?: string; nullValue?: null }
-interface FirestoreDocument { name?: string; fields?: Record<string, FirestoreValue> }
+interface OperationsEnv { DB: D1Database }
 type Profile = { role: string; subteam: string | null };
 
 const idPattern = /^[A-Za-z0-9_-]+$/;
 
 export function isOperationsRoute(pathname: string) {
-  return pathname === "/migrations/operations" || ["/calendar-events", "/time-entries", "/timeclock-pins", "/device-sessions"].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return ["/calendar-events", "/time-entries", "/timeclock-pins", "/device-sessions"].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
-export async function handleOperations(request: Request, env: OperationsEnv, uid: string, token: string, cors: Headers) {
+export async function handleOperations(request: Request, env: OperationsEnv, uid: string, cors: Headers) {
   try {
     const url = new URL(request.url);
-    const profile = await fetchProfile(uid, token, env);
-    if (url.pathname === "/migrations/operations") return migrateOperations(request, env, token, profile, cors);
+    const profile = await fetchProfile(uid, env);
     if (url.pathname === "/calendar-events" || url.pathname.startsWith("/calendar-events/")) return calendarRoute(request, env, uid, profile, cors);
     if (url.pathname === "/time-entries" || url.pathname.startsWith("/time-entries/")) return timeEntryRoute(request, env, uid, profile, cors);
     if (url.pathname === "/timeclock-pins" || url.pathname.startsWith("/timeclock-pins/")) return pinRoute(request, env, profile, cors);
@@ -163,55 +160,11 @@ async function deviceRoute(request: Request, env: OperationsEnv, uid: string, co
   return methodNotAllowed(cors);
 }
 
-async function migrateOperations(request: Request, env: OperationsEnv, token: string, profile: Profile, cors: Headers) {
-  if (request.method !== "POST") return methodNotAllowed(cors);
-  if (profile.role !== "coach") throw new Error("Forbidden");
-  const [calendarDocs, entryDocs, pinDocs] = await Promise.all([
-    fetchCollection("calendarEvents", token, env.FIREBASE_PROJECT_ID), fetchCollection("timeEntries", token, env.FIREBASE_PROJECT_ID), fetchCollection("timeclockPins", token, env.FIREBASE_PROJECT_ID),
-  ]);
-  const calendar = calendarDocs.map((doc) => validateCalendar(fields(doc), text(fields(doc).createdByUid), true));
-  const entries = entryDocs.map((doc) => fields(doc));
-  const pins = pinDocs.map((doc) => fields(doc));
-  if (calendar.length) await env.DB.batch(calendar.map((event) => calendarUpsert(env.DB, event)));
-  if (entries.length) await env.DB.batch(entries.map((entry) => timeEntryUpsert(env.DB, entry)));
-  if (pins.length) await env.DB.batch(pins.map((pin) => env.DB.prepare(`INSERT INTO timeclock_pins VALUES (?, ?, ?) ON CONFLICT(uid) DO UPDATE SET pin=excluded.pin, updated_at=excluded.updated_at`).bind(pin.uid, pin.pin, pin.updatedAt)));
-  const [calendarRows, entryRows, pinRows] = await Promise.all([
-    env.DB.prepare(`SELECT id, title, description, category, start_date AS startDate, end_date AS endDate, location, created_by_uid AS createdByUid, created_at AS createdAt FROM calendar_events`).all<Record<string, unknown>>(),
-    env.DB.prepare(timeEntrySelect()).all<Record<string, unknown>>(),
-    env.DB.prepare("SELECT uid, pin, updated_at AS updatedAt FROM timeclock_pins").all<Record<string, unknown>>(),
-  ]);
-  const calendarById = new Map(calendarRows.results.map((row) => [row.id, row]));
-  const entriesById = new Map(entryRows.results.map((row) => [row.id, row]));
-  const pinsByUid = new Map(pinRows.results.map((row) => [row.uid, row]));
-  const valuesMatch = (source: Record<string, unknown>, target: Record<string, unknown> | undefined, keys: string[]) => Boolean(target && keys.every((key) => (source[key] ?? null) === (target[key] ?? null)));
-  if (!calendar.every((event) => valuesMatch(event, calendarById.get(event.id), ["id", "title", "description", "category", "startDate", "endDate", "location", "createdByUid", "createdAt"])) ||
-      !entries.every((entry) => valuesMatch(entry, entriesById.get(entry.id), ["id", "uid", "activity", "activityName", "clockIn", "clockOut", "clockedInByUid", "clockedOutByUid"])) ||
-      !pins.every((pin) => valuesMatch(pin, pinsByUid.get(pin.uid), ["uid", "pin", "updatedAt"]))) {
-    throw new Error("Migration verification failed");
-  }
-  const counts = {
-    calendarEvents: (await env.DB.prepare("SELECT count(*) AS count FROM calendar_events").first<{ count: number }>())?.count ?? 0,
-    timeEntries: (await env.DB.prepare("SELECT count(*) AS count FROM time_entries").first<{ count: number }>())?.count ?? 0,
-    timeclockPins: (await env.DB.prepare("SELECT count(*) AS count FROM timeclock_pins").first<{ count: number }>())?.count ?? 0,
-  };
-  if (counts.calendarEvents < calendar.length || counts.timeEntries < entries.length || counts.timeclockPins < pins.length) throw new Error("Migration verification failed");
-  return json({ copied: { calendarEvents: calendar.length, timeEntries: entries.length, timeclockPins: pins.length }, verified: counts, deviceSessions: "migrate lazily as each device reconnects" }, 200, cors);
-}
-
-async function fetchProfile(uid: string, token: string, env: OperationsEnv): Promise<Profile> {
+async function fetchProfile(uid: string, env: OperationsEnv): Promise<Profile> {
   const row = await env.DB.prepare("SELECT role, subteam FROM users WHERE uid = ?").bind(uid).first<Profile>();
-  if (row) return row;
-  const response = await fetch(`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) throw new Error("Forbidden");
-  const doc = await response.json<FirestoreDocument>();
-  return { role: doc.fields?.role?.stringValue ?? "", subteam: doc.fields?.subteam?.stringValue ?? null };
+  if (!row) throw new Error("Forbidden");
+  return row;
 }
-async function fetchCollection(name: string, token: string, projectId: string) {
-  const response = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${name}?pageSize=1000`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) throw new Error("Forbidden");
-  return (await response.json<{ documents?: FirestoreDocument[] }>()).documents ?? [];
-}
-function fields(doc: FirestoreDocument) { return Object.fromEntries(Object.entries(doc.fields ?? {}).map(([key, value]) => [key, value.stringValue ?? null])) as Record<string, unknown>; }
 function asRecord(value: unknown) { if (!value || typeof value !== "object") throw new Error("Invalid request"); return value as Record<string, unknown>; }
 function text(value: unknown) { return typeof value === "string" ? value : ""; }
 function json(body: unknown, status: number, headers: Headers) { const next = new Headers(headers); next.set("Content-Type", "application/json; charset=utf-8"); return new Response(JSON.stringify(body), { status, headers: next }); }

@@ -1,16 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
 
-interface CoreEnv { DB: D1Database; FIREBASE_PROJECT_ID: string }
+interface CoreEnv { DB: D1Database }
 type User = { uid: string; displayName: string; email: string; role: "coach" | "student_leader" | "student"; subteam: string | null; certificationIds: string[]; createdAt: string; mustResetPassword: boolean };
 type Task = Record<string, unknown> & { id: string; title: string; subteam: string; status: string; leadersOnly: boolean; archived: boolean; order: number; updatedAt: string; assigneeUids: string[]; createdByUid: string; comments: Array<Record<string, unknown>>; attachments: Array<Record<string, unknown>>; history: Array<Record<string, unknown>> };
 const idPattern = /^[A-Za-z0-9_-]+$/;
 
-export function isCoreRoute(path: string) { return path === "/migrations/core" || path === "/users" || path.startsWith("/users/") || path === "/tasks" || path.startsWith("/tasks/"); }
+export function isCoreRoute(path: string) { return path === "/users" || path.startsWith("/users/") || path === "/tasks" || path.startsWith("/tasks/"); }
 
-export async function handleCore(request: Request, env: CoreEnv, uid: string, token: string, cors: Headers) {
+export async function handleCore(request: Request, env: CoreEnv, uid: string, cors: Headers) {
   try {
     const path = new URL(request.url).pathname;
-    if (path === "/migrations/core") return migrateCore(request, env, uid, token, cors);
     const profile = await getUser(env.DB, uid);
     if (!profile) throw new Error("Forbidden");
     if (path === "/users" || path.startsWith("/users/")) return usersRoute(request, env.DB, profile, cors);
@@ -124,24 +123,6 @@ function validateTask(value: unknown): Task {
 function taskUpsert(db: D1Database, task: Task) { return db.prepare(`INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, subteam=excluded.subteam, status=excluded.status, leaders_only=excluded.leaders_only, archived=excluded.archived, sort_order=excluded.sort_order, updated_at=excluded.updated_at, data=excluded.data`).bind(task.id, task.title, task.subteam, task.status, task.leadersOnly ? 1 : 0, task.archived ? 1 : 0, task.order, task.updatedAt, JSON.stringify(task)); }
 async function getTask(db: D1Database, id: string) { const row = await db.prepare("SELECT data FROM tasks WHERE id = ?").bind(id).first<{ data: string }>(); return row ? JSON.parse(row.data) as Task : null; }
 
-async function migrateCore(request: Request, env: CoreEnv, uid: string, token: string, cors: Headers) {
-  if (request.method !== "POST") return methodNotAllowed(cors);
-  const actorDoc = await fetchDocument("users", uid, token, env.FIREBASE_PROJECT_ID);
-  if (readFirestore(actorDoc).role !== "coach") throw new Error("Forbidden");
-  const [userDocs, taskDocs] = await Promise.all([fetchCollection("users", token, env.FIREBASE_PROJECT_ID), fetchCollection("tasks", token, env.FIREBASE_PROJECT_ID)]);
-  const users = userDocs.map((doc) => validateUser(readFirestore(doc)));
-  const tasks = taskDocs.map((doc) => validateTask(readFirestore(doc)));
-  if (users.length) await env.DB.batch(users.map((user) => userUpsert(env.DB, user)));
-  if (tasks.length) await env.DB.batch(tasks.map((task) => taskUpsert(env.DB, task)));
-  const [userRows, taskRows] = await Promise.all([env.DB.prepare("SELECT * FROM users").all<Record<string, unknown>>(), env.DB.prepare("SELECT id, data FROM tasks").all<{ id: string; data: string }>()]);
-  const usersById = new Map(userRows.results.map((row) => { const user = rowToUser(row); return [user.uid, user]; }));
-  const tasksById = new Map(taskRows.results.map((row) => [row.id, row.data]));
-  if (!users.every((user) => JSON.stringify(usersById.get(user.uid)) === JSON.stringify(user)) || !tasks.every((task) => tasksById.get(task.id) === JSON.stringify(task))) throw new Error("Migration verification failed");
-  const [userCount, taskCount] = await Promise.all([env.DB.prepare("SELECT count(*) AS count FROM users").first<{ count: number }>(), env.DB.prepare("SELECT count(*) AS count FROM tasks").first<{ count: number }>()]);
-  if ((userCount?.count ?? 0) < users.length || (taskCount?.count ?? 0) < tasks.length) throw new Error("Migration verification failed");
-  return json({ copied: { users: users.length, tasks: tasks.length }, verified: { users: userCount?.count ?? 0, tasks: taskCount?.count ?? 0 } }, 200, cors);
-}
-
 function validateUser(value: Record<string, unknown>): User {
   const user = { uid: string(value.uid), displayName: string(value.displayName), email: string(value.email), role: string(value.role) as User["role"], subteam: typeof value.subteam === "string" ? value.subteam : null, certificationIds: Array.isArray(value.certificationIds) ? value.certificationIds.filter((id): id is string => typeof id === "string") : [], createdAt: string(value.createdAt), mustResetPassword: Boolean(value.mustResetPassword) };
   if (!idPattern.test(user.uid) || !user.displayName || !user.email || !["coach", "student_leader", "student"].includes(user.role)) throw new Error("Invalid user"); return user;
@@ -150,12 +131,6 @@ function userUpsert(db: D1Database, user: User) { return db.prepare(`INSERT INTO
 export async function getUser(db: D1Database, uid: string): Promise<User | null> { const row = await db.prepare("SELECT * FROM users WHERE uid = ?").bind(uid).first<Record<string, unknown>>(); return row ? rowToUser(row) : null; }
 function rowToUser(row: Record<string, unknown>): User { return { uid: string(row.uid), displayName: string(row.display_name), email: string(row.email), role: string(row.role) as User["role"], subteam: typeof row.subteam === "string" ? row.subteam : null, certificationIds: JSON.parse(string(row.certification_ids) || "[]"), createdAt: string(row.created_at), mustResetPassword: row.must_reset_password === 1 }; }
 
-type FValue = { stringValue?: string; booleanValue?: boolean; integerValue?: string; doubleValue?: number; nullValue?: null; arrayValue?: { values?: FValue[] }; mapValue?: { fields?: Record<string, FValue> } };
-type FDoc = { fields?: Record<string, FValue> };
-function firestoreValue(value: FValue): unknown { if (value.stringValue !== undefined) return value.stringValue; if (value.booleanValue !== undefined) return value.booleanValue; if (value.integerValue !== undefined) return Number(value.integerValue); if (value.doubleValue !== undefined) return value.doubleValue; if (value.nullValue !== undefined) return null; if (value.arrayValue) return (value.arrayValue.values ?? []).map(firestoreValue); if (value.mapValue) return Object.fromEntries(Object.entries(value.mapValue.fields ?? {}).map(([key, nested]) => [key, firestoreValue(nested)])); return null; }
-function readFirestore(doc: FDoc) { return Object.fromEntries(Object.entries(doc.fields ?? {}).map(([key, value]) => [key, firestoreValue(value)])); }
-async function fetchDocument(collection: string, id: string, token: string, project: string) { const response = await fetch(`https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents/${collection}/${id}`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) throw new Error("Forbidden"); return response.json<FDoc>(); }
-async function fetchCollection(collection: string, token: string, project: string) { const response = await fetch(`https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents/${collection}?pageSize=1000`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) throw new Error("Forbidden"); return (await response.json<{ documents?: FDoc[] }>()).documents ?? []; }
 function string(value: unknown) { return typeof value === "string" ? value : ""; }
 function json(body: unknown, status: number, headers: Headers) { const next = new Headers(headers); next.set("Content-Type", "application/json; charset=utf-8"); return new Response(JSON.stringify(body), { status, headers: next }); }
 function methodNotAllowed(headers: Headers) { return new Response("Method not allowed", { status: 405, headers }); }

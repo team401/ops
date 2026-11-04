@@ -1,139 +1,51 @@
 # 401 Ops
 
-Team 401's operations hub for managing projects, assignments, certifications, attendance, inventory, and reporting. It is built as a static Next.js application and uses Firebase Authentication, Cloud Firestore, and Firebase Storage for its backend.
+Team 401's operations hub for projects, assignments, certifications, attendance, and reporting.
 
-## What the app does
+## Features
 
-- Kanban boards for the full team and individual subteams
-- Searchable drivetrain inventory for gears, pulleys, sprockets, and belts
-- Certification-aware task assignment and self-assignment
-- Task priorities, due dates, points of contact, comments, and file attachments
-- Stuck-task reasons and prerequisite task relationships
-- Calendar and embedded Gantt views for due dates and dependencies
-- Student and coach certification management
-- Metrics for task throughput, workload, and subteam activity
-- Individual reports containing task history, certifications, and attendance hours
-- CSV exports for team summaries, task history, and attendance
-- Coach-managed timeclock with shop and outreach sessions
-- Full-screen kiosk mode using automatically assigned 1–3 digit PINs
-- Coach tools for signing out one person or everyone who forgot to clock out
-- Coach roster administration, individual account creation, CSV batch imports, and prepared credential emails
+- Full-team and subteam Kanban boards
+- Certification-aware task assignment
+- Task comments, links, prerequisites, images, and file attachments
+- Calendar events and task deadlines
+- Coach-managed attendance and kiosk timeclock
+- Student reports, team metrics, and CSV exports
+- Coach roster, account, PIN, and certification administration
 
-## Roles and permissions
+The Parts, Scouting, and Battery links open Team 401's separate external apps.
 
-| Role | Access |
-| --- | --- |
-| Coach | Manages all tasks, accounts, PINs, certifications, reports, metrics, and timeclock sessions. Coaches can also launch kiosk mode. |
-| Student leader | Manages tasks and student certifications for their own subteam. Their reports are limited to their own information. |
-| Student | Can view boards, join eligible tasks, update assigned tasks, add comments or attachments, and view their own certifications and report. |
+## Architecture
 
-The interface hides unavailable actions, but the actual authorization boundary is enforced by `firestore.rules` and `storage.rules`.
+- Next.js 16 static export, React 19, TypeScript, and Tailwind CSS 4
+- Cloudflare Pages for production, staging, and feature previews
+- Cloudflare Worker API for authorization and data access
+- Cloudflare D1 for users, tasks, certifications, calendar, and attendance data
+- Cloudflare R2 for task attachments
+- Firebase Authentication for email/password identity only
 
-## Hardware inventory
-
-The authenticated `/inventory` page tracks quantities, bin locations, sourcing
-details, and category-specific specifications. It includes the team's standard
-20 DP gears, 3mm GT2 and 5mm HTD belts/pulleys, #25 and #35 sprockets, 9mm and
-15mm widths, single/double-sided belts, and common robot bore standards.
-Suggested specifications remain free-text entries, so newly acquired bore,
-profile, width, and chain options automatically become searchable filter
-choices without a schema change. Any signed-in team member can add hardware,
-edit records, and adjust stock; only coaches can permanently delete records.
-
-## Parts dashboard integration
-
-Parts exports and manufacturing tracking now live in the separate
-[Team 401 Parts dashboard](https://team401.org/export/). The **Parts** link in
-the header opens that dashboard in a new tab.
-
-The two sites use separate Firebase projects. Ops uses `team-401`; the Parts
-dashboard remains on `robotics-kanban`. This repository's `firestore.rules` and
-`storage.rules` protect only Ops data and task attachments and must be deployed
-only to `team-401`:
-
-```bash
-firebase deploy --only auth,firestore:rules,storage
-```
-
-Do not deploy these rules to `robotics-kanban`, because that project retains the
-manufacturing dashboard's exporter, OAuth, and file-access rules.
-
-## Technology
-
-- Next.js 16 with the App Router and static export
-- React 19 and TypeScript
-- Tailwind CSS 4
-- Firebase Authentication, Cloud Firestore, and Firebase Storage
-- dnd-kit for board interactions
-- Recharts for metrics
-- date-fns for scheduling and reports
+The Worker verifies Firebase ID tokens, then authorizes requests using the user's D1 profile. Firestore and Firebase Storage are not runtime dependencies.
 
 ## Local setup
 
-### 1. Install dependencies
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-### 2. Configure Firebase
-
-Create a Firebase project and web app, then enable:
-
-- Authentication with the Email/Password provider
-- Cloud Firestore
-- Firebase Storage
-
-Create `.env.local` in the project root using the Firebase web configuration:
+Create `.env.local`:
 
 ```env
 NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=team-401.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=team-401
 NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org
 ```
 
-These values identify the Firebase web app and are safe to include in a client build. Firebase security rules, not secrecy of these values, protect application data.
+Firebase web configuration identifies the Auth application and is intentionally available to the browser. Application authorization is enforced by the Worker API.
 
-### 3. Deploy the Firebase configuration
-
-Install and authenticate the Firebase CLI if needed, then select the correct Firebase project and deploy Email/Password Authentication plus both rule files:
-
-```bash
-npx firebase-tools login
-npx firebase-tools use --add
-npx firebase-tools deploy --only auth,firestore:rules,storage
-```
-
-Task attachments are limited to 20 MB per file by the Storage rules.
-
-### 4. Create the first coach
-
-There is deliberately no public account-registration page. The first coach must be bootstrapped from the Firebase console:
-
-1. In **Authentication → Users**, create an email/password user.
-2. Copy the new user's UID.
-3. In Firestore, create `users/{uid}` with the following fields:
-
-```json
-{
-  "uid": "the-authentication-uid",
-  "displayName": "Coach Name",
-  "email": "coach@example.com",
-  "role": "coach",
-  "subteam": null,
-  "certificationIds": [],
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "mustResetPassword": false
-}
-```
-
-After signing in, that coach can create the remaining accounts from **Admin → Roster**. New accounts receive a temporary password and an available timeclock PIN automatically.
-
-### 5. Start the development server
+Start the development server:
 
 ```bash
 npm run dev
@@ -141,100 +53,37 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Available commands
+## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start the local development server |
 | `npm run lint` | Run ESLint |
 | `npm run build` | Type-check and generate the static site in `out/` |
-| `npm run start` | Start Next.js in server mode; the deployed app normally uses the static export instead |
+| `npm run worker:check` | Type-check the Cloudflare Worker |
+| `npm run worker:deploy` | Deploy the Cloudflare Worker API |
+| `npm run d1:migrate` | Apply pending D1 schema migrations |
 
-## Firebase data
+## Accounts
 
-The app currently uses these top-level collections:
+There is no public registration page. Firebase Authentication stores account credentials, while the matching profile and permissions live in D1. Coaches create additional accounts from **Admin → Roster**; each new account receives a temporary password and a timeclock PIN.
 
-- `users` — profiles, roles, subteams, and certifications
-- `tasks` — task details, assignment history, comments, attachments, and dependencies
-- `certifications` — coach-managed certification definitions
-- `inventory` — mechanical hardware specifications, locations, and live stock counts
-- `subteams` — optional coach-managed subteam reference data
-- `timeclockPins` — coach-only kiosk PIN records kept separate from public profiles
-- `timeEntries` — shop and outreach attendance sessions
+Removing a roster profile immediately removes application access but does not delete the corresponding Firebase Authentication identity. Delete the Auth user from the Firebase console when the login itself must be permanently removed.
 
-Uploaded task files are stored under `task-attachments/{taskId}/...`. When
-`NEXT_PUBLIC_OPS_API_URL` is configured, new files go to the
-`team401-ops-attachments` R2 bucket through the authenticated Ops Worker.
-Existing Firebase Storage attachments continue to work during migration.
-Coaches can inventory and migrate them from **Admin > Data migration**.
-Scanning is read-only; migration verifies each R2 copy before updating its task
-record and does not delete the Firebase original.
+## Deployment flow
 
-The certification catalog is the first Firestore domain moving to the shared
-`team401-ops` D1 database. Apply its schema before deploying the Worker:
+- Feature branches open pull requests into `staging` and receive Cloudflare preview deployments.
+- `staging` publishes to `https://staging.ops.team401.org`.
+- A manually reviewed `staging` → `main` pull request promotes the tested UI.
+- `main` publishes to `https://ops.team401.org`.
+- Production and staging intentionally share the same D1 database, R2 bucket, and Firebase Auth project.
 
-```bash
-npm run d1:migrate
-npm run worker:deploy
-```
+Cloudflare Pages builds with `npm run build` and publishes `out`. Configure the Firebase Auth variables above plus `NEXT_PUBLIC_OPS_API_URL` in both production and preview environments.
 
-Then a coach can copy and verify the existing catalog from **Admin > Data
-migration**. Firestore certification records remain available for rollback.
+`workers/api/wrangler.jsonc` defines the `team401-ops-api` Worker, shared D1 database, R2 bucket, allowed browser origins, and `api.ops.team401.org` custom domain.
 
-The next checked-in migration batches calendar events, attendance entries,
-timeclock PINs, and signed-in device sessions. Run **Copy operational data to
-D1** once from the same Admin tab; device sessions move automatically as each
-browser reconnects. Firestore records are retained throughout the rollback
-window.
+Renovate targets `staging`. Routine non-major updates may auto-merge only after validation succeeds. Promotion to `main` remains manual.
 
-The final `0003_users_tasks.sql` migration moves user profiles and complete
-task records together. Run **Copy users and tasks to D1** from Admin after the
-preview deploys. Once verified, normal application data and authorization use
-D1; Firebase remains the authentication provider and an undeleted rollback
-snapshot.
+## Kiosk security
 
-## Timeclock and kiosk security
-
-Only a coach can launch the kiosk. Kiosk PINs identify which team member is clocking in or out; they are not Firebase passwords and cannot be used to sign into the main application.
-
-The kiosk runs inside the authenticated coach session, so exiting kiosk mode requires the current coach's password. While kiosk mode is active, a root-level guard blocks other app routes and replaces Back/Forward navigation with the locked timeclock. A safe-sign-out option is also available and returns the device to the login screen. Firestore rules restrict all time-entry writes and PIN reads to coaches.
-
-## Deploying to Cloudflare Pages
-
-The project is a static Next.js export connected to Cloudflare Pages through
-its GitHub integration. Cloudflare builds `main` as production and publishes it
-at `https://ops.team401.org/`. The `staging` branch and pull requests receive
-separate `pages.dev` preview deployments. Production and staging use the same
-Firebase project and therefore the same accounts and data; staging is only a
-UI/code preview.
-
-Configure the Pages project with `npm run build`, output directory `out`, and
-all `NEXT_PUBLIC_FIREBASE_*` environment variables listed above. No base path is
-used because production and each Cloudflare branch preview are served from the
-root of their respective hostnames.
-
-## Deploying the attachment Worker
-
-`wrangler.jsonc` defines the `team401-ops-api` Worker, its
-`team401-ops-attachments` R2 binding, and the `api.ops.team401.org` custom
-domain. The Worker verifies Firebase ID tokens and checks Firestore task and
-profile permissions before allowing uploads or deletions.
-
-Run `npm run worker:check` and `npm exec wrangler deploy -- --dry-run` before
-deployment. Deploy with `npm run worker:deploy`, then add
-`NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org` to both production and
-preview variables in Cloudflare Pages. Until that variable is present, uploads
-deliberately continue using Firebase Storage.
-
-Renovate targets `staging` and automatically merges routine non-major updates
-only after the install, lint, and production-build checks pass. Major updates
-remain manual because a green build cannot prove runtime compatibility. Promote
-tested staging changes to `main` with a manually reviewed pull request.
-Automation must not merge that promotion PR.
-
-## Operational notes
-
-- Removing someone from the Admin roster deletes their Firestore profile but not their Firebase Authentication record. Delete the Authentication user from the Firebase console when access must be fully revoked.
-- Changes to `firestore.rules` or `storage.rules` are not applied by the Cloudflare Pages deployment. Deploy Firebase rules separately.
-- Provisioning and using Firebase Storage requires the Firebase project to use the Blaze plan, even when usage remains within no-cost quotas.
-- Unknown routes redirect to the app home page, which then sends authenticated users to the board and signed-out users to login.
+Only coaches can launch kiosk mode. Kiosk PINs identify team members for attendance and are not Firebase passwords. A global guard prevents navigation away from the locked timeclock; exiting requires the signed-in coach's password or safe sign-out.
