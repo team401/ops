@@ -138,9 +138,13 @@ export default function AccountPage() {
 
 async function registerPushServiceWorker() {
   const options: RegistrationOptions = { scope: "/push-notifications/", type: "classic", updateViaCache: "none" };
-  const registration = await navigator.serviceWorker.register("/push-sw.js?v=3", options);
-  await waitForActiveWorker(registration);
-  return registration;
+  try {
+    const registration = await navigator.serviceWorker.register("/ops-worker.js?v=1", options);
+    await waitForActiveWorker(registration);
+    return registration;
+  } catch {
+    throw new Error("A content blocker may be preventing browser push from starting. Allow Ops in uBlock Origin or another blocker, reload the page, and try again.");
+  }
 }
 
 function waitForActiveWorker(registration: ServiceWorkerRegistration) {
