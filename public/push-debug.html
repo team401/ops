@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Push diagnostics</title>
+<style>body{font:18px system-ui;padding:24px;white-space:pre-wrap}pre{overflow-wrap:anywhere}</style>
+<h1>Push diagnostics</h1>
+<pre id="result">Running…</pre>
+<script>
+(async function () {
+  var output = { secureContext: window.isSecureContext, notificationPermission: Notification.permission, serviceWorkerSupported: "serviceWorker" in navigator };
+  try {
+    var empty = await navigator.serviceWorker.register("/sw-empty.js", { scope: "/sw-empty-test/", type: "classic", updateViaCache: "none" });
+    output.emptyWorker = { ok: true, scope: empty.scope };
+  } catch (error) {
+    output.emptyWorker = { ok: false, name: error.name, message: error.message, stack: error.stack };
+  }
+  try {
+    var actual = await navigator.serviceWorker.register("/push-sw.js", { scope: "/sw-push-test/", type: "classic", updateViaCache: "none" });
+    output.pushWorker = { ok: true, scope: actual.scope };
+  } catch (error) {
+    output.pushWorker = { ok: false, name: error.name, message: error.message, stack: error.stack };
+  }
+  document.getElementById("result").textContent = JSON.stringify(output, null, 2);
+  document.title = output.emptyWorker.ok + ":" + output.pushWorker.ok;
+}());
+</script>
+</html>
