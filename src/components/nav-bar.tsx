@@ -147,7 +147,6 @@ export function NavBar() {
             {accountOpen && <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-52 rounded-lg border border-steel-line bg-paper-raised p-1.5 text-ink shadow-xl">
               <p className="px-2 py-1.5 text-xs text-steel">{profile.role.replace("_", " ")}</p>
               <Link role="menuitem" href="/account" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Account &amp; settings</Link>
-              <Link role="menuitem" href="/reports" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Reports</Link>
               {isActualCoach && <button role="menuitem" type="button" onClick={() => { setAccountOpen(false); setSimulationOpen(true); }} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-blueprint/10"><Eye size={15} />Simulate user</button>}
               <button role="menuitem" type="button" onClick={() => signOut()} className="w-full rounded-md px-2 py-2 text-left text-sm text-danger hover:bg-danger/10">Sign out</button>
             </div>}
@@ -199,7 +198,6 @@ export function NavBar() {
             );
           })}
             <Link href="/account" onClick={() => setMobileOpen(false)} className="tracked-label rounded px-3 py-2.5 text-xs text-white/80 hover:bg-white/10">Account &amp; settings</Link>
-            <Link href="/reports" onClick={() => setMobileOpen(false)} className="tracked-label rounded px-3 py-2.5 text-xs text-white/80 hover:bg-white/10">Reports</Link>
           </div>
         </nav>
       )}

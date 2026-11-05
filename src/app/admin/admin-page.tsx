@@ -20,6 +20,7 @@ import {
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { parseCsv, downloadCsv } from "@/lib/csv";
 import { SUBTEAMS, type Role, type Subteam } from "@/types";
+import ReportsPage from "@/app/reports/reports-page";
 
 interface AccountCredentials {
   name: string;
@@ -31,7 +32,7 @@ interface AccountCredentials {
 
 export default function AdminPage() {
   const { profile } = useAuth();
-  const [tab, setTab] = useState<"roster" | "certifications">("roster");
+  const [tab, setTab] = useState<"roster" | "certifications" | "reports">("roster");
 
   if (profile?.role !== "coach") {
     return (
@@ -45,7 +46,7 @@ export default function AdminPage() {
     <AppShell>
       <div className="mb-5">
         <h1 className="text-lg font-semibold">Admin</h1>
-        <p className="text-sm text-steel">Manage accounts and the certification catalog.</p>
+        <p className="text-sm text-steel">Manage accounts, certifications, and team reports.</p>
       </div>
 
       <div className="flex gap-1.5 mb-5">
@@ -55,9 +56,10 @@ export default function AdminPage() {
           onClick={() => setTab("certifications")}
           label="Certifications"
         />
+        <TabButton active={tab === "reports"} onClick={() => setTab("reports")} label="Reports" />
       </div>
 
-      {tab === "roster" ? <RosterTab /> : <CertificationsTab />}
+      {tab === "roster" ? <RosterTab /> : tab === "certifications" ? <CertificationsTab /> : <ReportsPage embedded />}
     </AppShell>
   );
 }
