@@ -84,13 +84,12 @@ export default function AccountPage() {
         if (Notification.permission === "denied") throw new Error("Firefox has notifications blocked for this preview site. Use the permissions icon beside the address bar to allow notifications, then try again.");
         const permission = await Notification.requestPermission();
         if (permission !== "granted") throw new Error("Notification permission was not granted. In Firefox, check the permissions icon beside the address bar and allow notifications for this site.");
-        await registerPushServiceWorker();
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await registerPushServiceWorker();
         const existing = await registration.pushManager.getSubscription();
         const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapidPublicKey(notificationPreferences.vapidPublicKey) });
         await savePushSubscription(subscription);
       } else {
-        const registration = await navigator.serviceWorker.getRegistration("/");
+        const registration = await navigator.serviceWorker.getRegistration("/push-notifications/");
         const existing = await registration?.pushManager.getSubscription();
         if (existing) {
           await deletePushSubscription(existing.endpoint);
@@ -138,13 +137,22 @@ export default function AccountPage() {
 }
 
 async function registerPushServiceWorker() {
-  const options: RegistrationOptions = { scope: "/", type: "classic", updateViaCache: "none" };
-  try {
-    return await navigator.serviceWorker.register("/push-sw.js?v=2", options);
-  } catch (initialError) {
-    const staleRegistration = await navigator.serviceWorker.getRegistration("/");
-    if (!staleRegistration) throw initialError;
-    await staleRegistration.unregister();
-    return navigator.serviceWorker.register("/push-sw.js?v=2", options);
-  }
+  const options: RegistrationOptions = { scope: "/push-notifications/", type: "classic", updateViaCache: "none" };
+  const registration = await navigator.serviceWorker.register("/push-sw.js?v=3", options);
+  await waitForActiveWorker(registration);
+  return registration;
+}
+
+function waitForActiveWorker(registration: ServiceWorkerRegistration) {
+  if (registration.active) return Promise.resolve();
+  const worker = registration.installing ?? registration.waiting;
+  if (!worker) return Promise.reject(new Error("The push service worker did not start."));
+  return new Promise<void>((resolve, reject) => {
+    function handleStateChange() {
+      if (worker?.state === "activated") resolve();
+      if (worker?.state === "redundant") reject(new Error("Firefox could not activate the push service worker."));
+    }
+    worker.addEventListener("statechange", handleStateChange);
+    handleStateChange();
+  });
 }
