@@ -137,6 +137,22 @@ export interface CalendarEvent {
   updatedAt: string;
 }
 
+export interface OpsNotification {
+  id: string;
+  type: "assignment" | "comment" | "status" | string;
+  title: string;
+  body: string;
+  taskId: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationPreferences {
+  inAppEnabled: boolean;
+  pushEnabled: boolean;
+  vapidPublicKey: string | null;
+}
+
 export type TimeclockActivity = "shop" | "outreach";
 
 export interface TimeEntry {

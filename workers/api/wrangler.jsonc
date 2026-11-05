@@ -4,6 +4,7 @@
 	"account_id": "ac881ac39e2d61290a9eab1414ec3131",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-11-03",
+	"compatibility_flags": ["nodejs_compat"],
 	"workers_dev": true,
 	"routes": [
 		{
@@ -17,7 +18,9 @@
 	"vars": {
 		"FIREBASE_PROJECT_ID": "team-401",
 		"ALLOWED_ORIGINS": "https://ops.team401.org,https://staging.ops.team401.org,http://localhost:3000",
-		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev,ops-staging.pages.dev"
+		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev,ops-staging.pages.dev",
+		"VAPID_PUBLIC_KEY": "BMey25RDWFmA2j2ev5kmNDc_-vONSfGZYbx_9AXPp7Dk5X6hhPl8OenutpRPLVuzK5aiOKtJ-J8TlXbWbRLc_YM",
+		"VAPID_SUBJECT": "mailto:ops@team401.org"
 	},
 	"r2_buckets": [
 		{

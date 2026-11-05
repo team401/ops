@@ -8,6 +8,7 @@ import { useAuth } from "@/context/auth-context";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ModalBackdrop } from "@/components/modal-backdrop";
 import { useUsers } from "@/lib/hooks";
+import { NotificationMenu } from "@/components/notification-menu";
 
 type NavLink = {
   href: string;
@@ -114,6 +115,7 @@ export function NavBar() {
         </nav>
 
         <div className="relative ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
+          <NotificationMenu />
           <ThemeToggle />
           <button
             type="button"

@@ -3,6 +3,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { handleOperations, isOperationsRoute } from "./operations";
 import { handleCore, isCoreRoute } from "./core";
+import { handleNotifications, isNotificationRoute } from "./notifications";
 
 interface Env {
   ATTACHMENTS: R2Bucket;
@@ -10,6 +11,9 @@ interface Env {
   FIREBASE_PROJECT_ID: string;
   ALLOWED_ORIGINS: string;
   PAGES_HOST_SUFFIX: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 }
 
 const firebaseKeys = createRemoteJWKSet(
@@ -53,6 +57,16 @@ export default {
         return handleOperations(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Data request failed");
+      }
+    }
+
+    if (isNotificationRoute(url.pathname)) {
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        return handleNotifications(request, env, uid, cors);
+      } catch (error) {
+        return authenticatedError(error, cors, "Notification request failed");
       }
     }
 
