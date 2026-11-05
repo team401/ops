@@ -12,6 +12,7 @@ export interface NotificationEnv {
 }
 
 type TaskNotification = { type: string; title: string; body: string; taskId?: string | null };
+type DigestTask = { id: string; title: string; status: string; priority: string; dueDate: string | null; assigneeUids: string[]; archived: boolean };
 
 export function isNotificationRoute(pathname: string) {
   return pathname === "/notifications" || pathname.startsWith("/notifications/") ||
@@ -110,25 +111,27 @@ export async function sendDailyEmailDigests(env: NotificationEnv) {
   const recipients = await env.DB.prepare(`SELECT p.uid, u.email, u.display_name AS displayName, p.last_email_digest_at AS lastDigestAt
     FROM notification_preferences p JOIN users u ON u.uid = p.uid
     WHERE p.email_enabled = 1 AND u.email <> ''`).all<{ uid: string; email: string; displayName: string; lastDigestAt: string | null }>();
+  const taskRows = await env.DB.prepare("SELECT data FROM tasks WHERE archived = 0 AND status <> 'done'").all<{ data: string }>();
+  const openTasks = taskRows.results.flatMap((row) => {
+    try { return [JSON.parse(row.data) as DigestTask]; } catch { return []; }
+  });
   const completedAt = new Date().toISOString();
   await Promise.all(recipients.results.map(async (recipient) => {
-    const since = recipient.lastDigestAt ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const result = await env.DB.prepare(`SELECT title, body, task_id AS taskId, created_at AS createdAt
-      FROM notifications WHERE uid = ? AND created_at > ? ORDER BY created_at DESC LIMIT 25`)
-      .bind(recipient.uid, since).all<{ title: string; body: string; taskId: string | null; createdAt: string }>();
-    if (result.results.length === 0) {
+    const tasks = openTasks.filter((task) => task.assigneeUids.includes(recipient.uid)).sort(compareDigestTasks).slice(0, 25);
+    if (tasks.length === 0) {
       await markDigestComplete(env.DB, recipient.uid, completedAt);
       return;
     }
+    const dueSoonCount = tasks.filter((task) => task.dueDate && daysUntil(task.dueDate) <= 7).length;
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: env.RESEND_FROM,
         to: [recipient.email],
-        subject: `${result.results.length} Ops task update${result.results.length === 1 ? "" : "s"}`,
-        text: digestText(recipient.displayName, result.results),
-        html: digestHtml(recipient.displayName, result.results),
+        subject: `${tasks.length} assigned Ops task${tasks.length === 1 ? "" : "s"}${dueSoonCount ? ` · ${dueSoonCount} due soon` : ""}`,
+        text: digestText(recipient.displayName, tasks),
+        html: digestHtml(recipient.displayName, tasks),
       }),
     });
     if (!response.ok) throw new Error(`Resend digest failed with ${response.status}`);
@@ -140,14 +143,40 @@ function markDigestComplete(db: D1Database, uid: string, completedAt: string) {
   return db.prepare("UPDATE notification_preferences SET last_email_digest_at = ? WHERE uid = ?").bind(completedAt, uid).run();
 }
 
-function digestText(displayName: string, records: Array<{ title: string; body: string }>) {
-  return `Hi ${displayName},\n\n${records.map((record) => `${record.title}\n${record.body}`).join("\n\n")}\n\nOpen Ops: https://ops.team401.org/board`;
+function compareDigestTasks(a: DigestTask, b: DigestTask) {
+  const dueDifference = dueTimestamp(a.dueDate) - dueTimestamp(b.dueDate);
+  if (dueDifference !== 0) return dueDifference;
+  return priorityRank(a.priority) - priorityRank(b.priority) || a.title.localeCompare(b.title);
 }
 
-function digestHtml(displayName: string, records: Array<{ title: string; body: string }>) {
-  const items = records.map((record) => `<li style="margin:0 0 16px"><strong>${escapeHtml(record.title)}</strong><br>${escapeHtml(record.body)}</li>`).join("");
-  return `<div style="font-family:Arial,sans-serif;color:#202428;max-width:640px"><div style="background:#70193d;color:white;padding:18px 22px;font-size:20px;font-weight:700">401 Ops</div><div style="padding:22px"><p>Hi ${escapeHtml(displayName)},</p><p>Here is your daily task update:</p><ul style="padding-left:20px">${items}</ul><p><a href="https://ops.team401.org/board" style="display:inline-block;background:#8d214d;color:white;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Open Ops</a></p></div></div>`;
+function dueTimestamp(dueDate: string | null) { return dueDate ? new Date(dueDate).getTime() : Number.MAX_SAFE_INTEGER; }
+function priorityRank(priority: string) { return priority === "high" ? 0 : priority === "medium" ? 1 : 2; }
+function daysUntil(dueDate: string) { return Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86_400_000); }
+
+function dueLabel(dueDate: string | null) {
+  if (!dueDate) return "No due date";
+  const days = daysUntil(dueDate);
+  const date = new Date(dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  if (days < 0) return `OVERDUE · ${date}`;
+  if (days === 0) return `DUE TODAY · ${date}`;
+  if (days === 1) return `DUE TOMORROW · ${date}`;
+  return days <= 7 ? `DUE IN ${days} DAYS · ${date}` : `Due ${date}`;
 }
+
+function digestText(displayName: string, tasks: DigestTask[]) {
+  const items = tasks.map((task) => `${dueLabel(task.dueDate)} — ${task.title}\n${statusLabel(task.status)} · ${task.priority} priority`).join("\n\n");
+  return `Hi ${displayName},\n\nHere are your open assigned tasks, ordered by due date:\n\n${items}\n\nOpen My Tasks: https://ops.team401.org/my-tasks`;
+}
+
+function digestHtml(displayName: string, tasks: DigestTask[]) {
+  const items = tasks.map((task) => {
+    const urgent = task.dueDate && daysUntil(task.dueDate) <= 7;
+    return `<div style="border-left:4px solid ${urgent ? "#a51d3d" : "#8d214d"};background:${urgent ? "#fff3f3" : "#f6f3f4"};padding:12px 14px;margin:0 0 10px"><div style="font-size:12px;font-weight:700;color:${urgent ? "#a51d3d" : "#6b6470"};text-transform:uppercase">${escapeHtml(dueLabel(task.dueDate))}</div><div style="font-size:16px;font-weight:700;margin-top:3px">${escapeHtml(task.title)}</div><div style="font-size:13px;color:#5f6268;margin-top:4px">${escapeHtml(statusLabel(task.status))} · ${escapeHtml(task.priority)} priority</div></div>`;
+  }).join("");
+  return `<div style="font-family:Arial,sans-serif;color:#202428;max-width:640px"><div style="background:#70193d;color:white;padding:18px 22px;font-size:20px;font-weight:700">401 Ops</div><div style="padding:22px"><p>Hi ${escapeHtml(displayName)},</p><p>Here are your open assigned tasks. The nearest due dates are shown first.</p>${items}<p><a href="https://ops.team401.org/my-tasks" style="display:inline-block;background:#8d214d;color:white;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Open My Tasks</a></p></div></div>`;
+}
+
+function statusLabel(status: string) { return ({ backlog: "Backlog", in_progress: "In progress", blocked: "Stuck", review: "In review" } as Record<string, string>)[status] ?? status; }
 
 function escapeHtml(value: string) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
 
