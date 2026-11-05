@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, type SortingStrategy } from "@dnd-kit/sortable";
 import type { Task, TaskStatus, Certification, UserProfile } from "@/types";
 import { TaskCard } from "@/components/task-card";
 
@@ -13,6 +13,10 @@ const STATUS_META: Record<TaskStatus, { label: string }> = {
   review: { label: "Review" },
   done: { label: "Done" },
 };
+
+// The board renders its own insertion preview. Returning no transforms keeps
+// dnd-kit from also opening a second slot and shifting the entire task list.
+const insertionPreviewStrategy: SortingStrategy = () => null;
 
 interface KanbanColumnProps {
   status: TaskStatus;
@@ -54,7 +58,7 @@ export function KanbanColumn({
         className={`${collapsed ? "hidden md:block" : "block"} min-h-[120px] flex-1 rounded-lg border border-dashed p-1.5 transition-colors xl:overflow-y-auto xl:overscroll-contain ${isOver || dropPreview ? "border-blueprint bg-blueprint/10 ring-2 ring-inset ring-blueprint/20" : "border-steel-line/60"
           }`}
       >
-        <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={tasks.map((task) => task.id)} strategy={insertionPreviewStrategy}>
           <div className="space-y-1.5">
             {tasks.map((task, index) => <Fragment key={task.id}>
               {dropPreview?.task && dropPreview.index === index && <TaskDropPreview task={dropPreview.task} users={users} />}
