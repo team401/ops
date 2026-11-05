@@ -84,7 +84,7 @@ export default function AccountPage() {
         if (Notification.permission === "denied") throw new Error("Firefox has notifications blocked for this preview site. Use the permissions icon beside the address bar to allow notifications, then try again.");
         const permission = await Notification.requestPermission();
         if (permission !== "granted") throw new Error("Notification permission was not granted. In Firefox, check the permissions icon beside the address bar and allow notifications for this site.");
-        await navigator.serviceWorker.register("/push-sw.js", { scope: "/", type: "classic", updateViaCache: "none" });
+        await registerPushServiceWorker();
         const registration = await navigator.serviceWorker.ready;
         const existing = await registration.pushManager.getSubscription();
         const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapidPublicKey(notificationPreferences.vapidPublicKey) });
@@ -135,4 +135,16 @@ export default function AccountPage() {
       </div>
     </div>
   </AppShell>;
+}
+
+async function registerPushServiceWorker() {
+  const options: RegistrationOptions = { scope: "/", type: "classic", updateViaCache: "none" };
+  try {
+    return await navigator.serviceWorker.register("/push-sw.js?v=2", options);
+  } catch (initialError) {
+    const staleRegistration = await navigator.serviceWorker.getRegistration("/");
+    if (!staleRegistration) throw initialError;
+    await staleRegistration.unregister();
+    return navigator.serviceWorker.register("/push-sw.js?v=2", options);
+  }
 }
