@@ -15,7 +15,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const fetchNotifications = () => request<OpsNotification[]>("/notifications");
 export const fetchNotificationPreferences = () => request<NotificationPreferences>("/notification-preferences");
-export const saveNotificationPreferences = (preferences: Pick<NotificationPreferences, "inAppEnabled" | "pushEnabled">) => request<NotificationPreferences>("/notification-preferences", { method: "PUT", body: JSON.stringify(preferences) });
+export const saveNotificationPreferences = (preferences: Pick<NotificationPreferences, "inAppEnabled" | "pushEnabled" | "emailEnabled">) => request<NotificationPreferences>("/notification-preferences", { method: "PUT", body: JSON.stringify(preferences) });
 export const markNotificationRead = (id: string) => request<void>(`/notifications/${encodeURIComponent(id)}/read`, { method: "POST" });
 export const markAllNotificationsRead = () => request<void>("/notifications/read-all", { method: "POST" });
 export const savePushSubscription = (subscription: PushSubscription) => request<void>("/push-subscriptions", { method: "POST", body: JSON.stringify(subscription.toJSON()) });

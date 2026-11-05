@@ -150,6 +150,7 @@ export interface OpsNotification {
 export interface NotificationPreferences {
   inAppEnabled: boolean;
   pushEnabled: boolean;
+  emailEnabled: boolean;
   vapidPublicKey: string | null;
 }
 

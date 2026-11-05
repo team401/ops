@@ -3,7 +3,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { handleOperations, isOperationsRoute } from "./operations";
 import { handleCore, isCoreRoute } from "./core";
-import { handleNotifications, isNotificationRoute } from "./notifications";
+import { handleNotifications, isNotificationRoute, sendDailyEmailDigests } from "./notifications";
 
 interface Env {
   ATTACHMENTS: R2Bucket;
@@ -14,6 +14,8 @@ interface Env {
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
   VAPID_SUBJECT?: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM?: string;
 }
 
 const firebaseKeys = createRemoteJWKSet(
@@ -175,6 +177,9 @@ export default {
       const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
       return json({ error: status === 500 ? "Attachment request failed" : message }, status, cors);
     }
+  },
+  async scheduled(_controller: ScheduledController, env: Env, context: ExecutionContext) {
+    context.waitUntil(sendDailyEmailDigests(env));
   },
 } satisfies ExportedHandler<Env>;
 
