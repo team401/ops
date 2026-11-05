@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ExternalLink, Maximize2 } from "lucide-react";
+import { ExternalLink, GripVertical } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Task, Certification, UserProfile } from "@/types";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
@@ -23,6 +23,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
   const { profile, actualProfile } = useAuth();
   const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
   const collapsed = collapsedOverride ?? defaultCollapsed;
+  const cardRef = useRef<HTMLElement | null>(null);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !draggable, data: { status: task.status } });
   const meta = SUBTEAM_META[task.subteam];
   const assignees = users.filter((user) => task.assigneeUids.includes(user.uid));
@@ -39,12 +40,45 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
     : task.requiredCertificationIds.some((id) => profile.certificationIds.includes(id))));
   const canClaim = task.assigneeUids.length === 0 && isEligible && (profile?.role === "student" || profile?.role === "student_leader");
 
+  useEffect(() => {
+    if (collapsedOverride !== false) return;
+    function collapseAfterOutsideClick(event: PointerEvent) {
+      if (!cardRef.current?.contains(event.target as Node)) setCollapsedOverride(true);
+    }
+    document.addEventListener("pointerdown", collapseAfterOutsideClick);
+    return () => document.removeEventListener("pointerdown", collapseAfterOutsideClick);
+  }, [collapsedOverride]);
+
+  function handleCardAction() {
+    if (collapsed) {
+      setCollapsedOverride(false);
+      return;
+    }
+    onOpen();
+  }
+
   return (
     <article
-      ref={setNodeRef}
-      {...(draggable ? { ...listeners, ...attributes } : {})}
+      ref={(node) => {
+        cardRef.current = node;
+        setNodeRef(node);
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${collapsed ? "Expand" : "Open"} task: ${task.title}`}
+      aria-expanded={!collapsed}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a, button")) return;
+        handleCardAction();
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        handleCardAction();
+      }}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1, backgroundColor: `color-mix(in srgb, ${meta.color} 9%, var(--surface))`, borderLeftColor: meta.color }}
-      className={`relative rounded-lg border border-l-4 border-steel-line text-ink shadow-sm transition-shadow hover:shadow-md ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className="relative cursor-pointer rounded-lg border border-l-4 border-steel-line text-ink shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blueprint"
     >
       <div className="flex items-start gap-1 p-2.5">
         <div className="min-w-0 flex-1 text-left">
@@ -58,7 +92,18 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
               {task.leadersOnly && <span className="rounded-full bg-blueprint/12 px-1.5 py-0.5 text-[9px] font-bold text-blueprint">Leaders only</span>}
               {task.archived && <span className="rounded-full bg-hazard/15 px-1.5 py-0.5 text-[9px] font-bold text-hazard">Archived</span>}
             </div>
-            <span className="rounded-full border border-steel-line bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold" style={{ color: PRIORITY_MARK[task.priority].color }}>{PRIORITY_MARK[task.priority].label}</span>
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="rounded-full border border-steel-line bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold" style={{ color: PRIORITY_MARK[task.priority].color }}>{PRIORITY_MARK[task.priority].label}</span>
+              {draggable && <button
+                type="button"
+                {...attributes}
+                {...listeners}
+                onClick={(event) => event.stopPropagation()}
+                className="flex h-9 w-9 touch-none items-center justify-center rounded-md text-steel hover:bg-ink/5 hover:text-ink active:cursor-grabbing"
+                aria-label={`Drag ${task.title}`}
+                title="Drag task"
+              ><GripVertical size={17} /></button>}
+            </div>
           </div>
           <p className="mt-1 break-words text-sm font-semibold leading-snug">{task.title}</p>
         </div>
@@ -77,11 +122,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
         </>}
         {!collapsed && <div className="mt-1 flex items-start justify-between gap-2 text-[11px] text-steel"><span>POC: {contact?.displayName ?? "Task creator"}</span><span className="shrink-0">{task.dueDate ? `due ${new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}` : formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}</span></div>}
       </div>
-      <div className="grid grid-cols-2 border-t border-steel-line bg-surface/55 p-1" onPointerDown={(event) => event.stopPropagation()}>
-        <button type="button" onClick={onOpen} className="flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-blueprint hover:bg-blueprint/10"><Maximize2 size={13} />Open</button>
-        <button type="button" onClick={() => setCollapsedOverride(!collapsed)} className="flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-ink hover:bg-ink/5" aria-expanded={!collapsed}><ChevronDown size={14} className={`transition-transform ${collapsed ? "-rotate-90" : ""}`} />{collapsed ? "Expand" : "Collapse"}</button>
-      </div>
-      {canClaim && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => profile && claimTask(task.id, actualProfile?.uid ?? profile.uid)} className="w-full border-t border-success/30 bg-success/10 py-2 text-center text-[10px] font-bold hover:bg-success/20">Claim task</button>}
+      {canClaim && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (profile) claimTask(task.id, actualProfile?.uid ?? profile.uid); }} className="w-full border-t border-success/30 bg-success/10 py-2 text-center text-[10px] font-bold hover:bg-success/20">Claim task</button>}
       {!alreadyOn && !isEligible && task.requiredCertificationIds.length > 0 && <div className="w-full border-t border-danger/30 bg-danger/10 py-1.5 text-center text-[10px] font-bold">Certification required</div>}
     </article>
   );
