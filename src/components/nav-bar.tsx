@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, ExternalLink, Eye, Menu, Search, UserRound, X } from "lucide-react";
@@ -22,6 +22,7 @@ export function NavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [simulationOpen, setSimulationOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -31,6 +32,22 @@ export function NavBar() {
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [mobileOpen]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    function closeAccountMenu(event: PointerEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountOpen(false);
+    }
+    document.addEventListener("pointerdown", closeAccountMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeAccountMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountOpen]);
 
   if (!profile) return null;
 
@@ -117,22 +134,24 @@ export function NavBar() {
         <div className="relative ml-auto flex items-center gap-2 whitespace-nowrap xl:ml-0 2xl:gap-3">
           <NotificationMenu />
           <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => setAccountOpen((value) => !value)}
-            className="flex min-h-9 items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-2.5 text-xs font-medium text-white hover:bg-white/15"
-            aria-expanded={accountOpen}
-            aria-haspopup="menu"
-          >
-            <UserRound size={15} /><span className="hidden max-w-40 truncate sm:inline">{profile.displayName}</span><ChevronDown size={13} />
-          </button>
-          {accountOpen && <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-52 rounded-lg border border-steel-line bg-paper-raised p-1.5 text-ink shadow-xl">
-            <p className="px-2 py-1.5 text-xs text-steel">{profile.role.replace("_", " ")}</p>
-            <Link role="menuitem" href="/account" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Account &amp; settings</Link>
-            <Link role="menuitem" href="/reports" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Reports</Link>
-            {isActualCoach && <button role="menuitem" type="button" onClick={() => { setAccountOpen(false); setSimulationOpen(true); }} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-blueprint/10"><Eye size={15} />Simulate user</button>}
-            <button role="menuitem" type="button" onClick={() => signOut()} className="w-full rounded-md px-2 py-2 text-left text-sm text-danger hover:bg-danger/10">Sign out</button>
-          </div>}
+          <div ref={accountMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setAccountOpen((value) => !value)}
+              className="flex min-h-9 items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-2.5 text-xs font-medium text-white hover:bg-white/15"
+              aria-expanded={accountOpen}
+              aria-haspopup="menu"
+            >
+              <UserRound size={15} /><span className="hidden max-w-40 truncate sm:inline">{profile.displayName}</span><ChevronDown size={13} />
+            </button>
+            {accountOpen && <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-52 rounded-lg border border-steel-line bg-paper-raised p-1.5 text-ink shadow-xl">
+              <p className="px-2 py-1.5 text-xs text-steel">{profile.role.replace("_", " ")}</p>
+              <Link role="menuitem" href="/account" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Account &amp; settings</Link>
+              <Link role="menuitem" href="/reports" onClick={() => setAccountOpen(false)} className="block rounded-md px-2 py-2 text-sm hover:bg-blueprint/10">Reports</Link>
+              {isActualCoach && <button role="menuitem" type="button" onClick={() => { setAccountOpen(false); setSimulationOpen(true); }} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-blueprint/10"><Eye size={15} />Simulate user</button>}
+              <button role="menuitem" type="button" onClick={() => signOut()} className="w-full rounded-md px-2 py-2 text-left text-sm text-danger hover:bg-danger/10">Sign out</button>
+            </div>}
+          </div>
         </div>
       </div>
 

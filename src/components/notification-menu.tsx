@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/notification-api";
@@ -9,6 +9,7 @@ import type { OpsNotification } from "@/types";
 export function NotificationMenu() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<OpsNotification[]>([]);
+  const menuRef = useRef<HTMLDivElement>(null);
   const unread = useMemo(() => notifications.filter((notification) => !notification.readAt).length, [notifications]);
 
   useEffect(() => {
@@ -19,6 +20,22 @@ export function NotificationMenu() {
     window.addEventListener("focus", load);
     return () => { active = false; window.clearInterval(interval); window.removeEventListener("focus", load); };
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function closeMenu(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   async function readAll() {
     await markAllNotificationsRead();
@@ -34,7 +51,7 @@ export function NotificationMenu() {
     void markNotificationRead(notification.id);
   }
 
-  return <div className="relative">
+  return <div ref={menuRef} className="relative">
     <button type="button" onClick={() => setOpen((value) => !value)} className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/15" aria-label={unread > 0 ? `${unread} unread notifications` : "Notifications"} aria-expanded={open}>
       <Bell size={16} />
       {unread > 0 && <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-hazard px-1 text-[9px] font-bold text-[#14181c]">{unread > 9 ? "9+" : unread}</span>}
