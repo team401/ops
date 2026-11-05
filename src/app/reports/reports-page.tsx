@@ -39,7 +39,7 @@ function buildPerUserRecords(tasks: Task[]): Record<string, TaskRecord[]> {
   return map;
 }
 
-export default function ReportsPage() {
+export default function ReportsPage({ embedded = false }: { embedded?: boolean }) {
   const { profile, isCoach } = useAuth();
   const { tasks } = useTasks();
   const { users } = useUsers();
@@ -130,8 +130,8 @@ export default function ReportsPage() {
     downloadCsv(`attendance-detail-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   }
 
-  return (
-    <AppShell>
+  const content = (
+    <div>
       <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-lg font-semibold">Reports</h1>
@@ -202,8 +202,9 @@ export default function ReportsPage() {
       ) : (
         <p className="text-sm text-steel">Select a team member to open their complete report.</p>
       )}
-    </AppShell>
+    </div>
   );
+  return embedded ? content : <AppShell>{content}</AppShell>;
 }
 
 function MemberReport({

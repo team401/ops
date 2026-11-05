@@ -4,6 +4,7 @@ import { useState, FormEvent, useRef } from "react";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { AppShell } from "@/components/app-shell";
+import { SimulationDialog } from "@/components/simulation-dialog";
 import { ModalBackdrop } from "@/components/modal-backdrop";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/context/auth-context";
@@ -19,7 +20,9 @@ import {
 } from "@/lib/admin-actions";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { parseCsv, downloadCsv } from "@/lib/csv";
+import { Eye } from "lucide-react";
 import { SUBTEAMS, type Role, type Subteam } from "@/types";
+import ReportsPage from "@/app/reports/reports-page";
 
 interface AccountCredentials {
   name: string;
@@ -31,7 +34,8 @@ interface AccountCredentials {
 
 export default function AdminPage() {
   const { profile } = useAuth();
-  const [tab, setTab] = useState<"roster" | "certifications">("roster");
+  const [tab, setTab] = useState<"roster" | "certifications" | "reports">("roster");
+  const [simulationOpen, setSimulationOpen] = useState(false);
 
   if (profile?.role !== "coach") {
     return (
@@ -43,9 +47,9 @@ export default function AdminPage() {
 
   return (
     <AppShell>
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold">Admin</h1>
-        <p className="text-sm text-steel">Manage accounts and the certification catalog.</p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div><h1 className="text-lg font-semibold">Admin</h1><p className="text-sm text-steel">Manage accounts, certifications, and team reports.</p></div>
+        <button type="button" onClick={() => setSimulationOpen(true)} className="btn-secondary inline-flex items-center gap-2 text-sm"><Eye size={15} />Simulate user</button>
       </div>
 
       <div className="flex gap-1.5 mb-5">
@@ -55,9 +59,11 @@ export default function AdminPage() {
           onClick={() => setTab("certifications")}
           label="Certifications"
         />
+        <TabButton active={tab === "reports"} onClick={() => setTab("reports")} label="Reports" />
       </div>
 
-      {tab === "roster" ? <RosterTab /> : <CertificationsTab />}
+      {tab === "roster" ? <RosterTab /> : tab === "certifications" ? <CertificationsTab /> : <ReportsPage embedded />}
+      {simulationOpen && <SimulationDialog onClose={() => setSimulationOpen(false)} />}
     </AppShell>
   );
 }

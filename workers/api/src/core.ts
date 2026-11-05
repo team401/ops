@@ -1,8 +1,10 @@
 /// <reference types="@cloudflare/workers-types" />
 
-interface CoreEnv { DB: D1Database }
+import { notifyUsers, type NotificationEnv } from "./notifications";
+
+type CoreEnv = NotificationEnv;
 type User = { uid: string; displayName: string; email: string; role: "coach" | "student_leader" | "student"; subteam: string | null; certificationIds: string[]; createdAt: string; mustResetPassword: boolean };
-type Task = Record<string, unknown> & { id: string; title: string; subteam: string; status: string; leadersOnly: boolean; archived: boolean; order: number; updatedAt: string; assigneeUids: string[]; createdByUid: string; comments: Array<Record<string, unknown>>; attachments: Array<Record<string, unknown>>; history: Array<Record<string, unknown>> };
+type Task = Record<string, unknown> & { id: string; title: string; subteam: string; status: string; leadersOnly: boolean; archived: boolean; order: number; updatedAt: string; assigneeUids: string[]; createdByUid: string; pointOfContactUid?: string; comments: Array<Record<string, unknown>>; attachments: Array<Record<string, unknown>>; history: Array<Record<string, unknown>> };
 const idPattern = /^[A-Za-z0-9_-]+$/;
 
 export function isCoreRoute(path: string) { return path === "/users" || path.startsWith("/users/") || path === "/tasks" || path.startsWith("/tasks/"); }
@@ -13,7 +15,7 @@ export async function handleCore(request: Request, env: CoreEnv, uid: string, co
     const profile = await getUser(env.DB, uid);
     if (!profile) throw new Error("Forbidden");
     if (path === "/users" || path.startsWith("/users/")) return usersRoute(request, env.DB, profile, cors);
-    return tasksRoute(request, env.DB, profile, cors);
+    return tasksRoute(request, env, profile, cors);
   } catch (error) {
     console.error("Core API request failed", error);
     const message = error instanceof Error ? error.message : "Data request failed";
@@ -42,7 +44,8 @@ async function usersRoute(request: Request, db: D1Database, actor: User, cors: H
   return methodNotAllowed(cors);
 }
 
-async function tasksRoute(request: Request, db: D1Database, actor: User, cors: Headers) {
+async function tasksRoute(request: Request, env: CoreEnv, actor: User, cors: Headers) {
+  const db = env.DB;
   const pathParts = new URL(request.url).pathname.split("/");
   const id = decodeURIComponent(pathParts[2] ?? "");
   if (request.method === "GET" && !id) {
@@ -54,33 +57,43 @@ async function tasksRoute(request: Request, db: D1Database, actor: User, cors: H
   if (request.method === "POST" && !id) {
     const task = validateTask(await request.json());
     if (task.createdByUid !== actor.uid || (task.leadersOnly && actor.role === "student")) throw new Error("Forbidden");
-    await taskUpsert(db, task).run(); return json(task, 201, cors);
+    await taskUpsert(db, task).run();
+    await notifyUsers(env, task.assigneeUids.filter((recipient) => recipient !== actor.uid), { type: "assignment", title: "New task assignment", body: task.title, taskId: task.id }).catch(console.error);
+    return json(task, 201, cors);
   }
   if (!idPattern.test(id)) throw new Error("Invalid task ID");
   const existing = await getTask(db, id); if (!existing) throw new Error("Not found");
-  const manager = actor.role === "coach" || (actor.role === "student_leader" && actor.subteam === existing.subteam);
+  const editor = actor.role === "coach" || actor.role === "student_leader";
+  const canDelete = actor.role === "coach" || (actor.role === "student_leader" && actor.subteam === existing.subteam);
   if (pathParts[3] === "comments" && request.method === "POST") {
     const comment = await request.json<Record<string, unknown>>();
     if (typeof comment.id !== "string" || !idPattern.test(comment.id) || typeof comment.body !== "string" || !comment.body.trim() || comment.body.length > 2000 || comment.authorUid !== actor.uid || typeof comment.createdAt !== "string") throw new Error("Invalid comment");
     const task = validateTask({ ...existing, comments: [...existing.comments, { ...comment, body: comment.body.trim() }], updatedAt: comment.createdAt });
     await taskUpsert(db, task).run();
+    await notifyUsers(env, taskParticipants(task).filter((recipient) => recipient !== actor.uid), { type: "comment", title: `New update on ${task.title}`, body: comment.body.trim(), taskId: task.id }).catch(console.error);
     return json(task, 200, cors);
   }
   if (pathParts[3] === "attachments" && request.method === "POST") {
-    if (!manager && !existing.assigneeUids.includes(actor.uid)) throw new Error("Forbidden");
+    if (!canEditTaskContent(existing, actor)) throw new Error("Forbidden");
     const attachment = await request.json<Record<string, unknown>>();
     if (typeof attachment.id !== "string" || typeof attachment.url !== "string" || typeof attachment.storagePath !== "string") throw new Error("Invalid attachment");
     const task = validateTask({ ...existing, attachments: [...existing.attachments, attachment], updatedAt: new Date().toISOString() });
     await taskUpsert(db, task).run();
     return json(task, 200, cors);
   }
-  if (request.method === "DELETE") { if (!manager) throw new Error("Forbidden"); await db.prepare("DELETE FROM tasks WHERE id = ?").bind(id).run(); return new Response(null, { status: 204, headers: cors }); }
+  if (request.method === "DELETE") { if (!canDelete) throw new Error("Forbidden"); await db.prepare("DELETE FROM tasks WHERE id = ?").bind(id).run(); return new Response(null, { status: 204, headers: cors }); }
   if (request.method === "PATCH") {
     const changes = await request.json<Record<string, unknown>>();
-    if (!manager && !allowedTaskPatch(existing, changes, actor)) throw new Error("Forbidden");
+    if (!editor && !allowedTaskPatch(existing, changes, actor)) throw new Error("Forbidden");
     const task = validateTask({ ...existing, ...changes, id });
     if (actor.role === "student" && task.leadersOnly) throw new Error("Forbidden");
-    await taskUpsert(db, task).run(); return json(task, 200, cors);
+    await taskUpsert(db, task).run();
+    const newlyAssigned = task.assigneeUids.filter((recipient) => !existing.assigneeUids.includes(recipient) && recipient !== actor.uid);
+    await notifyUsers(env, newlyAssigned, { type: "assignment", title: "Task assigned to you", body: task.title, taskId: task.id }).catch(console.error);
+    if (task.status !== existing.status) {
+      await notifyUsers(env, taskParticipants(task).filter((recipient) => recipient !== actor.uid), { type: "status", title: `${task.title} moved to ${statusLabel(task.status)}`, body: "Open the task to see the latest status.", taskId: task.id }).catch(console.error);
+    }
+    return json(task, 200, cors);
   }
   return methodNotAllowed(cors);
 }
@@ -89,6 +102,13 @@ function allowedTaskPatch(task: Task, changes: Record<string, unknown>, actor: U
   const keys = Object.keys(changes);
   const only = (allowed: string[]) => keys.every((key) => allowed.includes(key));
   if (only(["status", "order", "updatedAt", "history"])) return true;
+  const contentKeys = new Set(["title", "description"]);
+  const certificationKeys = new Set(["requiredCertificationIds", "requireAllCertifications"]);
+  if (only(["title", "description", "requiredCertificationIds", "requireAllCertifications", "updatedAt"])) {
+    const changesContent = keys.some((key) => contentKeys.has(key));
+    const changesCertifications = keys.some((key) => certificationKeys.has(key));
+    return (!changesContent || canEditTaskContent(task, actor)) && (!changesCertifications || actor.role === "student");
+  }
   if (only(["comments", "updatedAt"])) {
     const next = Array.isArray(changes.comments) ? changes.comments as Array<Record<string, unknown>> : [];
     const added = next.at(-1);
@@ -112,6 +132,19 @@ function allowedTaskPatch(task: Task, changes: Record<string, unknown>, actor: U
     return true;
   }
   return false;
+}
+
+function canEditTaskContent(task: Task, actor: User) {
+  return actor.role === "coach" || actor.role === "student_leader" || task.createdByUid === actor.uid ||
+    actor.subteam === task.subteam || task.assigneeUids.includes(actor.uid);
+}
+
+function taskParticipants(task: Task) {
+  return [...new Set([...task.assigneeUids, task.createdByUid, task.pointOfContactUid ?? ""].filter(Boolean))];
+}
+
+function statusLabel(status: string) {
+  return ({ backlog: "Backlog", in_progress: "In progress", blocked: "Stuck", review: "Review", done: "Done" } as Record<string, string>)[status] ?? status;
 }
 
 function validateTask(value: unknown): Task {
