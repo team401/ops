@@ -120,6 +120,8 @@ export type CalendarEventCategory =
   | "meeting"
   | "other";
 
+export type CalendarEventRecurrence = "none" | "weekly" | "monthly" | "yearly";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -128,9 +130,28 @@ export interface CalendarEvent {
   startDate: string;
   endDate: string;
   location: string;
+  recurrence: CalendarEventRecurrence;
+  recurrenceUntil: string | null;
   createdByUid: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OpsNotification {
+  id: string;
+  type: "assignment" | "comment" | "status" | string;
+  title: string;
+  body: string;
+  taskId: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationPreferences {
+  inAppEnabled: boolean;
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  vapidPublicKey: string | null;
 }
 
 export type TimeclockActivity = "shop" | "outreach";

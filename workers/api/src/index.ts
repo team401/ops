@@ -3,6 +3,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { handleOperations, isOperationsRoute } from "./operations";
 import { handleCore, isCoreRoute } from "./core";
+import { handleNotifications, isNotificationRoute, sendDailyEmailDigests } from "./notifications";
 
 interface Env {
   ATTACHMENTS: R2Bucket;
@@ -10,6 +11,11 @@ interface Env {
   FIREBASE_PROJECT_ID: string;
   ALLOWED_ORIGINS: string;
   PAGES_HOST_SUFFIX: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM?: string;
 }
 
 const firebaseKeys = createRemoteJWKSet(
@@ -53,6 +59,16 @@ export default {
         return handleOperations(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Data request failed");
+      }
+    }
+
+    if (isNotificationRoute(url.pathname)) {
+      try {
+        const token = bearerToken(request);
+        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        return handleNotifications(request, env, uid, cors);
+      } catch (error) {
+        return authenticatedError(error, cors, "Notification request failed");
       }
     }
 
@@ -162,6 +178,9 @@ export default {
       return json({ error: status === 500 ? "Attachment request failed" : message }, status, cors);
     }
   },
+  async scheduled(_controller: ScheduledController, env: Env, context: ExecutionContext) {
+    context.waitUntil(sendDailyEmailDigests(env));
+  },
 } satisfies ExportedHandler<Env>;
 
 function bearerToken(request: Request) {
@@ -214,17 +233,17 @@ async function requireCoach(uid: string, env: Env) {
   if (profile?.role !== "coach") throw new Error("Forbidden");
 }
 
-function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUids?: string[] }, profile: { role?: string; subteam?: string | null }) {
+function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUids?: string[]; createdByUid?: string }, profile: { role?: string; subteam?: string | null }) {
   const role = profile.role;
   const profileSubteam = profile.subteam;
   const taskSubteam = task.subteam;
   const assignees = task.assigneeUids ?? [];
-  return role === "coach" || (role === "student_leader" && profileSubteam === taskSubteam) || assignees.includes(uid);
+  return role === "coach" || role === "student_leader" || task.createdByUid === uid || profileSubteam === taskSubteam || assignees.includes(uid);
 }
 
 async function fetchD1Task(db: D1Database, id: string) {
   const row = await db.prepare("SELECT data FROM tasks WHERE id = ?").bind(id).first<{ data: string }>();
-  return row ? JSON.parse(row.data) as { subteam?: string; assigneeUids?: string[] } : null;
+  return row ? JSON.parse(row.data) as { subteam?: string; assigneeUids?: string[]; createdByUid?: string } : null;
 }
 
 async function fetchD1Profile(db: D1Database, uid: string) {

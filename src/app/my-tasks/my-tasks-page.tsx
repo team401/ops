@@ -25,6 +25,7 @@ export default function MyTasksPage() {
   const { certifications } = useCertifications();
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [search, setSearch] = useState("");
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   const myTasks = useMemo(
     () => tasks.filter((task) => profile && task.assigneeUids.includes(profile.uid) && (!task.archived || Boolean(search.trim())) && taskMatchesSearch(task, users, search)),
@@ -63,6 +64,10 @@ export default function MyTasksPage() {
                   users={users}
                   draggable={false}
                   onOpen={() => setOpenTask(t)}
+                  active={activeTaskId === t.id}
+                  anotherCardActive={activeTaskId !== null && activeTaskId !== t.id}
+                  onActivate={() => setActiveTaskId(t.id)}
+                  onDeactivate={() => setActiveTaskId(null)}
                 />
                 <p className="tracked-label text-[10px] text-steel mt-1 pl-1">
                   {STATUS_LABEL[t.status]}

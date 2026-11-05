@@ -4,6 +4,7 @@
 	"account_id": "ac881ac39e2d61290a9eab1414ec3131",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-11-03",
+	"compatibility_flags": ["nodejs_compat"],
 	"workers_dev": true,
 	"routes": [
 		{
@@ -17,7 +18,13 @@
 	"vars": {
 		"FIREBASE_PROJECT_ID": "team-401",
 		"ALLOWED_ORIGINS": "https://ops.team401.org,https://staging.ops.team401.org,http://localhost:3000",
-		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev,ops-staging.pages.dev"
+		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev,ops-staging.pages.dev",
+		"VAPID_PUBLIC_KEY": "BMey25RDWFmA2j2ev5kmNDc_-vONSfGZYbx_9AXPp7Dk5X6hhPl8OenutpRPLVuzK5aiOKtJ-J8TlXbWbRLc_YM",
+		"VAPID_SUBJECT": "mailto:ops@team401.org",
+		"RESEND_FROM": "401 Ops <notifications@team401.org>"
+	},
+	"triggers": {
+		"crons": ["0 12 * * *"]
 	},
 	"r2_buckets": [
 		{
@@ -30,7 +37,7 @@
 			"binding": "DB",
 			"database_name": "team401-ops",
 			"database_id": "a2678adf-d1cd-4a21-8424-55180f5d6a95",
-			"migrations_dir": "migrations"
+			"migrations_dir": "../../migrations"
 		}
 	]
 }

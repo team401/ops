@@ -28,7 +28,7 @@ async function calendarRoute(request: Request, env: OperationsEnv, uid: string, 
   const id = decodeURIComponent(new URL(request.url).pathname.split("/")[2] ?? "");
   if (request.method === "GET" && !id) {
     const result = await env.DB.prepare(`SELECT id, title, description, category, start_date AS startDate, end_date AS endDate,
-      location, created_by_uid AS createdByUid, created_at AS createdAt, updated_at AS updatedAt
+      location, recurrence, recurrence_until AS recurrenceUntil, created_by_uid AS createdByUid, created_at AS createdAt, updated_at AS updatedAt
       FROM calendar_events ORDER BY start_date, title COLLATE NOCASE`).all();
     return json(result.results, 200, cors);
   }
@@ -57,18 +57,25 @@ function validateCalendar(value: unknown, uid: string, preserveCreator = false) 
   const event = {
     id: text(record.id), title: text(record.title).trim(), description: text(record.description).trim(), category: text(record.category),
     startDate: text(record.startDate), endDate: text(record.endDate), location: text(record.location).trim(),
+    recurrence: text(record.recurrence) || "none", recurrenceUntil: text(record.recurrenceUntil) || null,
     createdByUid: preserveCreator ? text(record.createdByUid) || uid : uid,
     createdAt: preserveCreator ? text(record.createdAt) || now : now, updatedAt: now,
   };
-  if (!idPattern.test(event.id) || !event.title || event.title.length > 160 || event.description.length > 2000 || !["outreach", "competition", "deadline", "meeting", "other"].includes(event.category) || !/^\d{4}-\d{2}-\d{2}$/.test(event.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(event.endDate) || event.endDate < event.startDate || event.location.length > 200) throw new Error("Invalid calendar event");
+  const validRecurrence = ["none", "weekly", "monthly", "yearly"].includes(event.recurrence);
+  const validRecurrenceUntil = event.recurrence === "none"
+    ? event.recurrenceUntil === null
+    : Boolean(event.recurrenceUntil && /^\d{4}-\d{2}-\d{2}$/.test(event.recurrenceUntil) && event.recurrenceUntil >= event.startDate);
+  if (!idPattern.test(event.id) || !event.title || event.title.length > 160 || event.description.length > 2000 || !["outreach", "competition", "deadline", "meeting", "other"].includes(event.category) || !/^\d{4}-\d{2}-\d{2}$/.test(event.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(event.endDate) || event.endDate < event.startDate || event.location.length > 200 || !validRecurrence || !validRecurrenceUntil) throw new Error("Invalid calendar event");
   return event;
 }
 
 function calendarUpsert(db: D1Database, event: ReturnType<typeof validateCalendar>) {
-  return db.prepare(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  return db.prepare(`INSERT INTO calendar_events (id, title, description, category, start_date, end_date, location, recurrence, recurrence_until, created_by_uid, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description, category=excluded.category,
-    start_date=excluded.start_date, end_date=excluded.end_date, location=excluded.location, updated_at=excluded.updated_at`)
-    .bind(event.id, event.title, event.description, event.category, event.startDate, event.endDate, event.location, event.createdByUid, event.createdAt, event.updatedAt);
+    start_date=excluded.start_date, end_date=excluded.end_date, location=excluded.location, recurrence=excluded.recurrence,
+    recurrence_until=excluded.recurrence_until, updated_at=excluded.updated_at`)
+    .bind(event.id, event.title, event.description, event.category, event.startDate, event.endDate, event.location, event.recurrence, event.recurrenceUntil, event.createdByUid, event.createdAt, event.updatedAt);
 }
 
 async function timeEntryRoute(request: Request, env: OperationsEnv, uid: string, profile: Profile, cors: Headers) {

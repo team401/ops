@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import {
   addMonths,
+  addWeeks,
+  addYears,
+  differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
@@ -34,7 +37,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 export default function CalendarPage() {
-  const { profile, isCoach, canManageSubteam } = useAuth();
+  const { profile, isCoach } = useAuth();
   const { tasks } = useTasks();
   const { events } = useCalendarEvents();
   const { users } = useUsers();
@@ -44,15 +47,21 @@ export default function CalendarPage() {
   const [openEvent, setOpenEvent] = useState<CalendarEvent | null>(null);
   const [createEventDate, setCreateEventDate] = useState<string | null>(null);
   const [view, setView] = useState<"calendar" | "gantt">("calendar");
+  const [taskScope, setTaskScope] = useState<"team" | "mine">("team");
+
+  const visibleTasks = useMemo(
+    () => taskScope === "mine" && profile ? tasks.filter((task) => task.assigneeUids.includes(profile.uid)) : tasks,
+    [profile, taskScope, tasks]
+  );
 
   const dueTasks = useMemo(
-    () => tasks
+    () => visibleTasks
       .filter((task) => task.status !== "done" && task.dueDate)
       .sort((a, b) => {
         const dateDifference = (a.dueDate ?? "").localeCompare(b.dueDate ?? "");
         return dateDifference || PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
       }),
-    [tasks]
+    [visibleTasks]
   );
 
   const tasksByDate = useMemo(() => {
@@ -75,7 +84,7 @@ export default function CalendarPage() {
     const grouped = new Map<string, CalendarEvent[]>();
     for (const day of calendarDays) {
       const key = format(day, "yyyy-MM-dd");
-      const matching = events.filter((event) => event.startDate <= key && event.endDate >= key);
+      const matching = events.filter((event) => eventOccursOn(event, key));
       if (matching.length > 0) grouped.set(key, matching);
     }
     return grouped;
@@ -93,11 +102,7 @@ export default function CalendarPage() {
   }, [eventsByDate, tasksByDate, visibleMonth]);
 
   const canManageCalendar = isCoach || profile?.role === "student_leader";
-  const editableSubteams = isCoach
-    ? SUBTEAMS
-    : profile?.role === "student_leader" && profile.subteam
-      ? [profile.subteam]
-      : [];
+  const editableSubteams = isCoach || profile?.role === "student_leader" ? SUBTEAMS : [];
 
   function openToday() {
     setVisibleMonth(startOfMonth(new Date()));
@@ -130,6 +135,10 @@ export default function CalendarPage() {
             >
               Gantt
             </button>
+          </div>
+          <div className="flex rounded border border-steel-line bg-paper-raised p-0.5" aria-label="Task scope">
+            <button type="button" onClick={() => setTaskScope("team")} className={`rounded-sm px-3 py-1.5 tracked-label text-[10px] ${taskScope === "team" ? "bg-blueprint text-white" : "text-steel hover:text-ink"}`}>Team</button>
+            <button type="button" onClick={() => setTaskScope("mine")} className={`rounded-sm px-3 py-1.5 tracked-label text-[10px] ${taskScope === "mine" ? "bg-blueprint text-white" : "text-steel hover:text-ink"}`}>My tasks</button>
           </div>
           {view === "calendar" && (
             <button type="button" onClick={openToday} className="btn-secondary text-xs">Today</button>
@@ -246,7 +255,7 @@ export default function CalendarPage() {
         </div>
         </div>
       ) : (
-        <GanttView tasks={tasks.filter((task) => !task.archived)} onOpenTask={setOpenTask} />
+        <GanttView tasks={visibleTasks.filter((task) => !task.archived)} onOpenTask={setOpenTask} />
       )}
 
       {openTask && (
@@ -255,7 +264,7 @@ export default function CalendarPage() {
           task={openTask}
           tasks={tasks}
           defaultSubteam={openTask.subteam}
-          editableSubteams={canManageSubteam(openTask.subteam) ? editableSubteams : [openTask.subteam]}
+          editableSubteams={editableSubteams.length > 0 ? editableSubteams : [openTask.subteam]}
           certifications={certifications}
           users={users}
           onClose={() => setOpenTask(null)}
@@ -295,7 +304,7 @@ function CalendarEventCard({ event, onClick, compact = false }: { event: Calenda
     >
       <span className={`${compact ? "line-clamp-2 text-[10px]" : "text-sm"} block font-semibold leading-snug`}>{event.title}</span>
       <span className={`${compact ? "mt-0.5 text-[8px]" : "mt-1.5 text-[10px]"} tracked-label block font-bold`} style={{ color: `color-mix(in srgb, ${meta.color} 65%, var(--ink))` }}>
-        {meta.label}
+        {meta.label}{event.recurrence !== "none" ? " · Repeats" : ""}
       </span>
       {!compact && event.location && <span className="mt-1 block truncate text-xs text-steel">{event.location}</span>}
     </button>
@@ -335,4 +344,24 @@ function CalendarTask({ task, onClick, compact = false }: { task: Task; onClick:
 function dateFromKey(key: string) {
   const [year, month, day] = key.split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function eventOccursOn(event: CalendarEvent, key: string) {
+  if (event.recurrence === "none") return event.startDate <= key && event.endDate >= key;
+  if (!event.recurrenceUntil || key < event.startDate || key > event.recurrenceUntil) return false;
+  const day = dateFromKey(key);
+  const seriesStart = dateFromKey(event.startDate);
+  const duration = differenceInCalendarDays(dateFromKey(event.endDate), seriesStart);
+  for (let index = 0; index < 1000; index += 1) {
+    const occurrenceStart = event.recurrence === "weekly"
+      ? addWeeks(seriesStart, index)
+      : event.recurrence === "monthly"
+        ? addMonths(seriesStart, index)
+        : addYears(seriesStart, index);
+    if (occurrenceStart > day) return false;
+    const occurrenceEnd = new Date(occurrenceStart);
+    occurrenceEnd.setDate(occurrenceEnd.getDate() + duration);
+    if (day >= occurrenceStart && day <= occurrenceEnd) return true;
+  }
+  return false;
 }

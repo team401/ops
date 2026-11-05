@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragOverEvent, DragStartEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { Search } from "lucide-react";
-import type { Task, TaskStatus, Subteam, Certification, UserProfile } from "@/types";
+import type { Task, TaskStatus, Subteam, Certification, UserProfile, Priority } from "@/types";
 import { TASK_STATUSES } from "@/types";
 import { KanbanColumn } from "@/components/kanban-column";
 import { TaskDialog } from "@/components/task-dialog";
@@ -11,6 +11,9 @@ import { incompletePrerequisites, reorderTasks } from "@/lib/task-actions";
 import { taskMatchesSearch } from "@/lib/task-search";
 import { getCardDefault, subscribeCardDefault } from "@/lib/card-preferences";
 import { useAuth } from "@/context/auth-context";
+import { SUBTEAM_META } from "@/lib/subteam-meta";
+
+const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -38,6 +41,7 @@ export function KanbanBoard({
   const [search, setSearch] = useState("");
   const [dragError, setDragError] = useState<string | null>(null);
   const [dragPreview, setDragPreview] = useState<{ taskId: string; status: TaskStatus; index: number } | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const cardDefault = useSyncExternalStore(subscribeCardDefault, getCardDefault, () => "collapsed");
   const [collapsedColumns, setCollapsedColumns] = useState<Set<TaskStatus>>(new Set());
   // Mouse: drag starts after a small movement, same as before. Touch: drag
@@ -59,8 +63,9 @@ export function KanbanBoard({
 
   function tasksFor(status: TaskStatus) {
     return scopedTasks.filter((task) => task.status === status).sort((a, b) => {
+      const priorityDifference = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
       const prerequisiteDifference = Number(prerequisiteIds.has(b.id)) - Number(prerequisiteIds.has(a.id));
-      return prerequisiteDifference || a.order - b.order || a.createdAt.localeCompare(b.createdAt);
+      return priorityDifference || prerequisiteDifference || a.order - b.order || a.createdAt.localeCompare(b.createdAt);
     });
   }
 
@@ -78,9 +83,14 @@ export function KanbanBoard({
     if (!TASK_STATUSES.includes(status)) return;
 
     const destinationTasks = tasksFor(status).filter((candidate) => candidate.id !== task.id);
-    if (!overTask || overTask.id === task.id) {
+    if (overTask?.id === task.id) {
       const originalIndex = tasksFor(status).findIndex((candidate) => candidate.id === task.id);
       setDragPreview({ taskId: task.id, status, index: originalIndex < 0 ? destinationTasks.length : Math.min(originalIndex, destinationTasks.length) });
+      return;
+    }
+
+    if (!overTask || overTask.priority !== task.priority) {
+      setDragPreview({ taskId: task.id, status, index: priorityGroupEnd(destinationTasks, task.priority) });
       return;
     }
 
@@ -147,7 +157,20 @@ export function KanbanBoard({
       </div>
       {dragError && <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"><span>{dragError}</span><button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold">Dismiss</button></div>}
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        autoScroll={{
+          acceleration: 5,
+          interval: 10,
+          threshold: { x: 0.05, y: 0.15 },
+          canScroll: (element) => element.scrollHeight > element.clientHeight,
+        }}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+      >
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 pb-4 md:grid-cols-2 xl:flex xl:overflow-x-auto xl:pb-0">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn
@@ -165,11 +188,17 @@ export function KanbanBoard({
                 return next;
               })}
               shouldCollapseCard={(task) => cardDefault === "collapsed" && !task.assigneeUids.includes(profile?.uid ?? "")}
+              activeTaskId={activeTaskId}
+              onActivateTask={setActiveTaskId}
+              onDeactivateTask={() => setActiveTaskId(null)}
               draggable={!search.trim()}
               dropPreview={dragPreview?.status === status ? { task: scopedTasks.find((task) => task.id === dragPreview.taskId) ?? null, index: dragPreview.index } : null}
             />
           ))}
         </div>
+        <DragOverlay dropAnimation={null} zIndex={1000}>
+          {dragPreview ? <DraggedTaskCard task={scopedTasks.find((task) => task.id === dragPreview.taskId)} users={users} /> : null}
+        </DragOverlay>
       </DndContext>
 
       {openTask && (
@@ -197,4 +226,29 @@ export function KanbanBoard({
       )}
     </div>
   );
+}
+
+function DraggedTaskCard({ task, users }: { task: Task | undefined; users: UserProfile[] }) {
+  if (!task) return null;
+  const meta = SUBTEAM_META[task.subteam];
+  const assignees = users.filter((user) => task.assigneeUids.includes(user.uid));
+  return <div
+    className="w-full cursor-grabbing rounded-lg border border-l-4 border-blueprint bg-surface px-3 py-2.5 text-ink shadow-2xl ring-2 ring-blueprint/35"
+    style={{ backgroundColor: `color-mix(in srgb, ${meta.color} 12%, var(--surface))`, borderLeftColor: meta.color }}
+  >
+    <div className="flex items-start justify-between gap-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: `color-mix(in srgb, ${meta.color} 70%, var(--ink))` }}>
+        {meta.label} — {assignees.length > 0 ? assignees.map((user) => user.displayName).join(", ") : "Unclaimed"}
+      </p>
+      <span className="rounded-full border border-steel-line bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold capitalize">{task.priority}</span>
+    </div>
+    <p className="mt-1 break-words text-sm font-semibold leading-snug">{task.title}</p>
+  </div>;
+}
+
+function priorityGroupEnd(tasks: Task[], priority: Priority) {
+  const lastMatchingIndex = tasks.findLastIndex((task) => task.priority === priority);
+  if (lastMatchingIndex >= 0) return lastMatchingIndex + 1;
+  const firstLowerPriority = tasks.findIndex((task) => PRIORITY_ORDER[task.priority] > PRIORITY_ORDER[priority]);
+  return firstLowerPriority < 0 ? tasks.length : firstLowerPriority;
 }
