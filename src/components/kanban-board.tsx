@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragOverEvent, DragStartEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { Search } from "lucide-react";
 import type { Task, TaskStatus, Subteam, Certification, UserProfile, Priority } from "@/types";
 import { TASK_STATUSES } from "@/types";
@@ -11,6 +11,7 @@ import { incompletePrerequisites, reorderTasks } from "@/lib/task-actions";
 import { taskMatchesSearch } from "@/lib/task-search";
 import { getCardDefault, subscribeCardDefault } from "@/lib/card-preferences";
 import { useAuth } from "@/context/auth-context";
+import { SUBTEAM_META } from "@/lib/subteam-meta";
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
@@ -195,6 +196,9 @@ export function KanbanBoard({
             />
           ))}
         </div>
+        <DragOverlay dropAnimation={null} zIndex={1000}>
+          {dragPreview ? <DraggedTaskCard task={scopedTasks.find((task) => task.id === dragPreview.taskId)} users={users} /> : null}
+        </DragOverlay>
       </DndContext>
 
       {openTask && (
@@ -222,6 +226,24 @@ export function KanbanBoard({
       )}
     </div>
   );
+}
+
+function DraggedTaskCard({ task, users }: { task: Task | undefined; users: UserProfile[] }) {
+  if (!task) return null;
+  const meta = SUBTEAM_META[task.subteam];
+  const assignees = users.filter((user) => task.assigneeUids.includes(user.uid));
+  return <div
+    className="w-full cursor-grabbing rounded-lg border border-l-4 border-blueprint bg-surface px-3 py-2.5 text-ink shadow-2xl ring-2 ring-blueprint/35"
+    style={{ backgroundColor: `color-mix(in srgb, ${meta.color} 12%, var(--surface))`, borderLeftColor: meta.color }}
+  >
+    <div className="flex items-start justify-between gap-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: `color-mix(in srgb, ${meta.color} 70%, var(--ink))` }}>
+        {meta.label} — {assignees.length > 0 ? assignees.map((user) => user.displayName).join(", ") : "Unclaimed"}
+      </p>
+      <span className="rounded-full border border-steel-line bg-surface/80 px-1.5 py-0.5 text-[9px] font-bold capitalize">{task.priority}</span>
+    </div>
+    <p className="mt-1 break-words text-sm font-semibold leading-snug">{task.title}</p>
+  </div>;
 }
 
 function priorityGroupEnd(tasks: Task[], priority: Priority) {

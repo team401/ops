@@ -82,7 +82,7 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
         event.preventDefault();
         handleCardAction();
       }}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1, backgroundColor: `color-mix(in srgb, ${meta.color} 9%, var(--surface))`, borderLeftColor: meta.color }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1, backgroundColor: `color-mix(in srgb, ${meta.color} 9%, var(--surface))`, borderLeftColor: meta.color }}
       className="relative cursor-pointer rounded-lg border border-l-4 border-steel-line text-ink shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blueprint"
     >
       <div className="flex items-start gap-1 p-2.5">
