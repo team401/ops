@@ -61,7 +61,9 @@ export async function handleNotifications(request: Request, env: NotificationEnv
 
   if (url.pathname === "/notification-email-preview") {
     if (request.method !== "POST") return methodNotAllowed(cors, "POST, OPTIONS");
-    if (!env.RESEND_API_KEY || !env.RESEND_FROM) return json({ error: "Email delivery is not configured" }, 503, cors);
+    const preferences = await readPreferences(env.DB, uid);
+    if (!preferences.inAppEnabled && !preferences.pushEnabled && !preferences.emailEnabled) return json({ error: "Turn on at least one notification channel first" }, 400, cors);
+    if (preferences.emailEnabled && (!env.RESEND_API_KEY || !env.RESEND_FROM)) return json({ error: "Email delivery is not configured" }, 503, cors);
     const recipient = await env.DB.prepare(`SELECT u.email, u.display_name AS displayName, p.last_email_preview_at AS lastPreviewAt
       FROM users u LEFT JOIN notification_preferences p ON p.uid = u.uid WHERE u.uid = ?`)
       .bind(uid).first<{ email: string; displayName: string; lastPreviewAt: string | null }>();
@@ -70,8 +72,7 @@ export async function handleNotifications(request: Request, env: NotificationEnv
       return json({ error: "Wait a minute before sending another preview" }, 429, cors);
     }
     const tasks = await assignedTasks(env.DB, uid);
-    await sendDigestEmail(env, recipient, tasks, true);
-    const preferences = await readPreferences(env.DB, uid);
+    if (preferences.emailEnabled) await sendDigestEmail(env, recipient, tasks, true);
     if (preferences.inAppEnabled || preferences.pushEnabled) {
       await notifyUsers(env, [uid], {
         type: "preview",
@@ -82,7 +83,7 @@ export async function handleNotifications(request: Request, env: NotificationEnv
     await env.DB.prepare(`INSERT INTO notification_preferences (uid, in_app_enabled, push_enabled, email_enabled, updated_at, last_email_preview_at)
       VALUES (?, 1, 0, 0, ?, ?) ON CONFLICT(uid) DO UPDATE SET last_email_preview_at=excluded.last_email_preview_at`)
       .bind(uid, new Date().toISOString(), new Date().toISOString()).run();
-    const channels = ["email", ...(preferences.inAppEnabled ? ["in-app"] : []), ...(preferences.pushEnabled ? ["push"] : [])];
+    const channels = [...(preferences.emailEnabled ? ["email"] : []), ...(preferences.inAppEnabled ? ["in-app"] : []), ...(preferences.pushEnabled ? ["push"] : [])];
     return json({ sent: true, taskCount: tasks.length, channels }, 200, cors);
   }
 
@@ -100,6 +101,11 @@ export async function handleNotifications(request: Request, env: NotificationEnv
   const match = url.pathname.match(/^\/notifications\/([A-Za-z0-9_-]+)\/read$/);
   if (match && request.method === "POST") {
     await env.DB.prepare("UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND uid = ?").bind(new Date().toISOString(), match[1], uid).run();
+    return new Response(null, { status: 204, headers: cors });
+  }
+  const notificationMatch = url.pathname.match(/^\/notifications\/([A-Za-z0-9_-]+)$/);
+  if (notificationMatch && request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM notifications WHERE id = ? AND uid = ?").bind(notificationMatch[1], uid).run();
     return new Response(null, { status: 204, headers: cors });
   }
   return methodNotAllowed(cors, "GET, POST, OPTIONS");

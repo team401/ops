@@ -1,13 +1,5 @@
 "use strict";
 
-self.addEventListener("install", function (event) {
-  event.waitUntil(self.skipWaiting());
-});
-
-self.addEventListener("activate", function (event) {
-  event.waitUntil(self.clients.claim());
-});
-
 self.addEventListener("push", function (event) {
   var notification = { title: "401 Ops", body: "You have a new task update." };
   if (event.data) {

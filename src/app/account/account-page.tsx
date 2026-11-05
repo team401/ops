@@ -80,16 +80,21 @@ export default function AccountPage() {
     setSavingNotifications(true); setNotificationMessage("");
     try {
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !notificationPreferences.vapidPublicKey) throw new Error("Push notifications are not available in this browser yet.");
-      const registration = await navigator.serviceWorker.register("/push-sw.js");
-      const existing = await registration.pushManager.getSubscription();
       if (enabled) {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") throw new Error("Allow notifications in your browser to turn on push alerts.");
+        await navigator.serviceWorker.register("/push-sw.js", { scope: "/", type: "classic", updateViaCache: "none" });
+        const registration = await navigator.serviceWorker.ready;
+        const existing = await registration.pushManager.getSubscription();
         const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapidPublicKey(notificationPreferences.vapidPublicKey) });
         await savePushSubscription(subscription);
-      } else if (existing) {
-        await deletePushSubscription(existing.endpoint);
-        await existing.unsubscribe();
+      } else {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const existing = await registration?.pushManager.getSubscription();
+        if (existing) {
+          await deletePushSubscription(existing.endpoint);
+          await existing.unsubscribe();
+        }
       }
       setNotificationPreferences(await saveNotificationPreferences({ inAppEnabled: notificationPreferences.inAppEnabled, pushEnabled: enabled, emailEnabled: notificationPreferences.emailEnabled }));
       setNotificationMessage(enabled ? "Push notifications are on for this browser." : "Push notifications are off for this browser.");
