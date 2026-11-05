@@ -40,6 +40,7 @@ export function KanbanBoard({
   const [search, setSearch] = useState("");
   const [dragError, setDragError] = useState<string | null>(null);
   const [dragPreview, setDragPreview] = useState<{ taskId: string; status: TaskStatus; index: number } | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const cardDefault = useSyncExternalStore(subscribeCardDefault, getCardDefault, () => "collapsed");
   const [collapsedColumns, setCollapsedColumns] = useState<Set<TaskStatus>>(new Set());
   // Mouse: drag starts after a small movement, same as before. Touch: drag
@@ -173,6 +174,9 @@ export function KanbanBoard({
                 return next;
               })}
               shouldCollapseCard={(task) => cardDefault === "collapsed" && !task.assigneeUids.includes(profile?.uid ?? "")}
+              activeTaskId={activeTaskId}
+              onActivateTask={setActiveTaskId}
+              onDeactivateTask={() => setActiveTaskId(null)}
               draggable={!search.trim()}
               dropPreview={dragPreview?.status === status ? { task: scopedTasks.find((task) => task.id === dragPreview.taskId) ?? null, index: dragPreview.index } : null}
             />

@@ -24,12 +24,15 @@ interface KanbanColumnProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   shouldCollapseCard: (task: Task) => boolean;
+  activeTaskId: string | null;
+  onActivateTask: (taskId: string) => void;
+  onDeactivateTask: () => void;
   draggable: boolean;
   dropPreview: { task: Task | null; index: number } | null;
 }
 
 export function KanbanColumn({
-  status, tasks, allTasks, certifications, users, onOpenTask, collapsed, onToggleCollapsed, shouldCollapseCard, draggable, dropPreview,
+  status, tasks, allTasks, certifications, users, onOpenTask, collapsed, onToggleCollapsed, shouldCollapseCard, activeTaskId, onActivateTask, onDeactivateTask, draggable, dropPreview,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const meta = STATUS_META[status];
@@ -56,7 +59,9 @@ export function KanbanColumn({
             {tasks.map((task, index) => <Fragment key={task.id}>
               {dropPreview?.task && dropPreview.index === index && <TaskDropPreview task={dropPreview.task} users={users} />}
               <TaskCard task={task} tasks={allTasks} certifications={certifications} users={users}
-                draggable={draggable && !task.archived} defaultCollapsed={shouldCollapseCard(task)} onOpen={() => onOpenTask(task)} />
+                draggable={draggable && !task.archived} defaultCollapsed={shouldCollapseCard(task)} onOpen={() => onOpenTask(task)}
+                active={activeTaskId === task.id} anotherCardActive={activeTaskId !== null && activeTaskId !== task.id}
+                onActivate={() => onActivateTask(task.id)} onDeactivate={onDeactivateTask} />
             </Fragment>)}
             {dropPreview?.task && dropPreview.index >= tasks.length && <TaskDropPreview task={dropPreview.task} users={users} />}
           </div>

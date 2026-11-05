@@ -17,12 +17,13 @@ const BLOCKED_REASON_LABEL: Record<NonNullable<Task["blockedReason"]>, string> =
   parts: "Waiting on parts / order", information: "Waiting on information", approval: "Waiting on approval", prerequisite: "Waiting on prerequisite", other: "Blocked",
 };
 
-export function TaskCard({ task, tasks, certifications, users, draggable, onOpen, defaultCollapsed = false }: {
+export function TaskCard({ task, tasks, certifications, users, draggable, onOpen, defaultCollapsed = false, active = false, anotherCardActive = false, onActivate, onDeactivate }: {
   task: Task; tasks: Task[]; certifications: Certification[]; users: UserProfile[]; draggable: boolean; onOpen: () => void; defaultCollapsed?: boolean;
+  active?: boolean; anotherCardActive?: boolean; onActivate?: () => void; onDeactivate?: () => void;
 }) {
   const { profile, actualProfile } = useAuth();
   const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
-  const collapsed = collapsedOverride ?? defaultCollapsed;
+  const collapsed = active ? false : anotherCardActive ? true : collapsedOverride ?? defaultCollapsed;
   const cardRef = useRef<HTMLElement | null>(null);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !draggable, data: { status: task.status } });
   const meta = SUBTEAM_META[task.subteam];
@@ -41,17 +42,21 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
   const canClaim = task.assigneeUids.length === 0 && isEligible && (profile?.role === "student" || profile?.role === "student_leader");
 
   useEffect(() => {
-    if (collapsedOverride !== false) return;
+    if (!active && collapsedOverride !== false) return;
     function collapseAfterOutsideClick(event: PointerEvent) {
-      if (!cardRef.current?.contains(event.target as Node)) setCollapsedOverride(true);
+      if (!cardRef.current?.contains(event.target as Node)) {
+        if (active) onDeactivate?.();
+        else setCollapsedOverride(true);
+      }
     }
     document.addEventListener("pointerdown", collapseAfterOutsideClick);
     return () => document.removeEventListener("pointerdown", collapseAfterOutsideClick);
-  }, [collapsedOverride]);
+  }, [active, collapsedOverride, onDeactivate]);
 
   function handleCardAction() {
     if (collapsed) {
-      setCollapsedOverride(false);
+      if (onActivate) onActivate();
+      else setCollapsedOverride(false);
       return;
     }
     onOpen();
