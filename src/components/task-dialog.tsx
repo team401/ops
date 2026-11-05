@@ -46,7 +46,7 @@ export function TaskDialog({
   task,
   onClose,
 }: TaskDialogProps) {
-  const { profile, actualProfile, isCoach, canManageSubteam } = useAuth();
+  const { profile, actualProfile, isCoach, isStudentLeader } = useAuth();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [leadersOnly, setLeadersOnly] = useState(task?.leadersOnly ?? false);
@@ -78,12 +78,15 @@ export function TaskDialog({
   const [error, setError] = useState<string | null>(null);
   const [createdWithAttachmentError, setCreatedWithAttachmentError] = useState(false);
 
-  const canManageThisTask = task ? canManageSubteam(task.subteam) : true;
-  const canDelete = mode === "edit" && task && canManageSubteam(task.subteam);
-  const readOnly = mode === "edit" && (!!task?.archived || !canManageThisTask);
   const isOnThisTask = !!(task && profile && task.assigneeUids.includes(profile.uid));
-  const hasStatusControl = mode === "edit" && !task?.archived && (canManageThisTask || isOnThisTask);
-  const canAttach = !readOnly || isOnThisTask;
+  const isTaskCollaborator = !!(task && profile && (task.createdByUid === profile.uid || task.subteam === profile.subteam || isOnThisTask));
+  const canFullyEdit = mode === "create" || (!!task && !task.archived && (isCoach || isStudentLeader));
+  const canEditContent = canFullyEdit || (!!task && !task.archived && isTaskCollaborator);
+  const canEditCertifications = canFullyEdit || (!!task && !task.archived && profile?.role === "student");
+  const canSaveChanges = canFullyEdit || canEditContent || canEditCertifications;
+  const canDelete = mode === "edit" && !!task && (isCoach || (isStudentLeader && profile?.subteam === task.subteam));
+  const hasStatusControl = mode === "edit" && !task?.archived && (canFullyEdit || isTaskCollaborator);
+  const canAttach = !!task && !task.archived && (canFullyEdit || isTaskCollaborator);
 
   // Assignment is deliberately cross-subteam. A leaders-only task cannot be
   // assigned to someone who is not allowed to see it.
@@ -173,26 +176,19 @@ export function TaskDialog({
           }
         }
       } else if (task) {
-        await updateTask(task.id, {
-          title,
-          description,
-          leadersOnly,
-          subteam,
-          priority,
-          requiredCertificationIds,
-          requireAllCertifications: requireAll,
+        const changes: Partial<Task> = {};
+        if (canEditContent) Object.assign(changes, { title, description });
+        if (canEditCertifications) Object.assign(changes, { requiredCertificationIds, requireAllCertifications: requireAll });
+        if (canFullyEdit) Object.assign(changes, {
+          leadersOnly, subteam, priority,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
           pointOfContactUid: pointOfContactUid || task.createdByUid,
-          blockedReason: blockedReason || null,
-          blockedDetails,
-          prerequisiteTaskIds,
-          links,
+          blockedReason: blockedReason || null, blockedDetails, prerequisiteTaskIds, links,
         });
-        const changed =
-          assigneeUids.length !== task.assigneeUids.length ||
-          assigneeUids.some((uid) => !task.assigneeUids.includes(uid));
-        if (changed) {
-          await setAssignees(task, assigneeUids);
+        await updateTask(task.id, changes);
+        if (canFullyEdit) {
+          const changed = assigneeUids.length !== task.assigneeUids.length || assigneeUids.some((uid) => !task.assigneeUids.includes(uid));
+          if (changed) await setAssignees(task, assigneeUids);
         }
       }
       onClose();
@@ -378,7 +374,7 @@ export function TaskDialog({
       >
         <div className="flex items-center justify-between">
           <h2 id="task-dialog-title" className="tracked-label text-xs text-blueprint font-bold">
-            {mode === "create" ? "New task" : readOnly ? "Task" : "Edit task"}
+            {mode === "create" ? "New task" : canSaveChanges ? "Edit task" : "Task"}
           </h2>
           <button type="button" onClick={onClose} className="text-steel text-sm">
             Close
@@ -434,8 +430,8 @@ export function TaskDialog({
                 className="input mt-1"
                 value={blockedReason}
                 onChange={(e) => setBlockedReason(e.target.value as BlockedReason)}
-                disabled={readOnly}
-                required={!readOnly}
+                disabled={!canFullyEdit}
+                required={canFullyEdit}
               >
                 <option value="">Select a reason</option>
                 {Object.entries(BLOCKED_REASON_LABEL).map(([value, label]) => (
@@ -450,7 +446,7 @@ export function TaskDialog({
                 rows={2}
                 value={blockedDetails}
                 onChange={(e) => setBlockedDetails(e.target.value)}
-                disabled={readOnly}
+                disabled={!canFullyEdit}
                 placeholder="Order number, person to follow up with, next check-in…"
               />
             </label>
@@ -464,7 +460,7 @@ export function TaskDialog({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            disabled={readOnly}
+            disabled={!canEditContent}
           />
         </label>
 
@@ -475,7 +471,7 @@ export function TaskDialog({
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditContent}
           />
         </label>
 
@@ -486,7 +482,7 @@ export function TaskDialog({
               className="input mt-1"
               value={subteam}
               onChange={(e) => setSubteam(e.target.value as Subteam)}
-              disabled={readOnly || (mode === "edit" && !isCoach)}
+              disabled={!canFullyEdit}
             >
               {editableSubteams.map((s) => (
                 <option key={s} value={s}>
@@ -501,7 +497,7 @@ export function TaskDialog({
               className="input mt-1"
               value={priority}
               onChange={(e) => setPriority(e.target.value as Priority)}
-              disabled={readOnly}
+              disabled={!canFullyEdit}
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -517,18 +513,18 @@ export function TaskDialog({
             className="input mt-1"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            disabled={readOnly}
+            disabled={!canFullyEdit}
           />
         </label>
 
-        {(!readOnly || leadersOnly) && (profile?.role === "coach" || profile?.role === "student_leader") && (
+        {(canFullyEdit || leadersOnly) && (profile?.role === "coach" || profile?.role === "student_leader") && (
           <label className="flex items-start gap-3 rounded border border-steel-line bg-surface p-3">
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4"
               checked={leadersOnly}
               onChange={(e) => handleLeadersOnlyChange(e.target.checked)}
-              disabled={readOnly}
+              disabled={!canFullyEdit}
             />
             <span>
               <span className="block text-sm font-semibold">Leaders only</span>
@@ -542,7 +538,7 @@ export function TaskDialog({
         <details className="task-dialog-section" open={mode === "create"}>
           <summary>Assignment &amp; requirements</summary>
           <div className="mt-3 space-y-4">
-        {!readOnly && (
+        {canFullyEdit && (
           <div>
             <span className="tracked-label text-xs text-steel">Assignees</span>
             <div className="mt-1.5">
@@ -557,7 +553,7 @@ export function TaskDialog({
             )}
           </div>
         )}
-        {readOnly && (
+        {!canFullyEdit && (
           <div>
             <span className="tracked-label text-xs text-steel">Assignees</span>
             <p className="text-sm mt-1">
@@ -577,7 +573,7 @@ export function TaskDialog({
             className="input mt-1"
             value={pointOfContactUid}
             onChange={(e) => setPointOfContactUid(e.target.value)}
-            disabled={readOnly}
+            disabled={!canFullyEdit}
           >
             <option value="">Task creator ({creator?.displayName ?? profile?.displayName ?? "current user"})</option>
             {visibleUsers.map((user) => (
@@ -596,7 +592,7 @@ export function TaskDialog({
                 <button
                   type="button"
                   key={c.id}
-                  disabled={readOnly}
+                  disabled={!canEditCertifications}
                   onClick={() => toggleCert(c.id)}
                   className={`text-xs px-2 py-1 rounded-sm border ${requiredCertificationIds.includes(c.id)
                       ? "bg-blueprint text-white border-blueprint"
@@ -613,7 +609,7 @@ export function TaskDialog({
                 type="checkbox"
                 checked={requireAll}
                 onChange={(e) => setRequireAll(e.target.checked)}
-                disabled={readOnly}
+                disabled={!canEditCertifications}
               />
               Require all selected certifications (default: any one is enough)
             </label>
@@ -633,7 +629,7 @@ export function TaskDialog({
                   className="mt-0.5"
                   checked={prerequisiteTaskIds.includes(candidate.id)}
                   onChange={() => togglePrerequisite(candidate.id)}
-                  disabled={readOnly}
+                  disabled={!canFullyEdit}
                 />
                 <span className="min-w-0">
                   <span className="block truncate">{candidate.title}</span>
@@ -659,12 +655,12 @@ export function TaskDialog({
             <p className="text-xs text-steel">The first link is shown on the task card. Put the most useful CAD or reference link first.</p>
             {links.map((link, index) => (
               <div key={link.id} className="grid gap-2 rounded-lg border border-steel-line bg-surface p-2.5 sm:grid-cols-[1fr_1.6fr_auto]">
-                <input className="input" value={link.label} onChange={(event) => changeLink(link.id, { label: event.target.value })} placeholder={index === 0 ? "Primary link label" : "Link label"} disabled={readOnly} />
-                <input type="url" className="input" value={link.url} onChange={(event) => changeLink(link.id, { url: event.target.value })} placeholder="https://…" required disabled={readOnly} />
-                {readOnly ? <a href={link.url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-center text-xs">Open</a> : <button type="button" onClick={() => setLinks((current) => current.filter((item) => item.id !== link.id))} className="text-xs text-danger">Remove</button>}
+                <input className="input" value={link.label} onChange={(event) => changeLink(link.id, { label: event.target.value })} placeholder={index === 0 ? "Primary link label" : "Link label"} disabled={!canFullyEdit} />
+                <input type="url" className="input" value={link.url} onChange={(event) => changeLink(link.id, { url: event.target.value })} placeholder="https://…" required disabled={!canFullyEdit} />
+                {!canFullyEdit ? <a href={link.url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-center text-xs">Open</a> : <button type="button" onClick={() => setLinks((current) => current.filter((item) => item.id !== link.id))} className="text-xs text-danger">Remove</button>}
               </div>
             ))}
-            {!readOnly && <button type="button" onClick={addLink} className="btn-secondary text-xs">+ Add link</button>}
+            {canFullyEdit && <button type="button" onClick={addLink} className="btn-secondary text-xs">+ Add link</button>}
           </div>
         </details>
 
@@ -711,7 +707,7 @@ export function TaskDialog({
                       {attachment.name}
                     </a>
                     <span className="shrink-0 text-[10px] text-steel">{formatFileSize(attachment.size)}</span>
-                    {(canManageThisTask || isOnThisTask) && (
+                    {canAttach && (
                       <button type="button" onClick={() => handleRemoveAttachment(attachment)} className="text-xs text-danger">Remove</button>
                     )}
                   </div>
@@ -764,7 +760,7 @@ export function TaskDialog({
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="flex items-center gap-2 pt-2">
-          {!readOnly && (
+          {canSaveChanges && (
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Saving…" : mode === "create" ? "Create task" : "Save changes"}
             </button>
@@ -774,10 +770,10 @@ export function TaskDialog({
               {changingStatus ? "Moving…" : "Done — send to review"}
             </button>
           )}
-          {canManageThisTask && status === "done" && !task?.archived && (
+          {canFullyEdit && status === "done" && !task?.archived && (
             <button type="button" onClick={handleArchive} className="btn-secondary">Archive task</button>
           )}
-          {canManageThisTask && task?.archived && (
+          {(isCoach || isStudentLeader) && task?.archived && (
             <button type="button" onClick={handleRestore} className="btn-primary">Restore to Done</button>
           )}
           {isOnThisTask && (

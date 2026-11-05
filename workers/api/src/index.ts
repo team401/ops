@@ -214,17 +214,17 @@ async function requireCoach(uid: string, env: Env) {
   if (profile?.role !== "coach") throw new Error("Forbidden");
 }
 
-function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUids?: string[] }, profile: { role?: string; subteam?: string | null }) {
+function canChangeAttachments(uid: string, task: { subteam?: string; assigneeUids?: string[]; createdByUid?: string }, profile: { role?: string; subteam?: string | null }) {
   const role = profile.role;
   const profileSubteam = profile.subteam;
   const taskSubteam = task.subteam;
   const assignees = task.assigneeUids ?? [];
-  return role === "coach" || (role === "student_leader" && profileSubteam === taskSubteam) || assignees.includes(uid);
+  return role === "coach" || role === "student_leader" || task.createdByUid === uid || profileSubteam === taskSubteam || assignees.includes(uid);
 }
 
 async function fetchD1Task(db: D1Database, id: string) {
   const row = await db.prepare("SELECT data FROM tasks WHERE id = ?").bind(id).first<{ data: string }>();
-  return row ? JSON.parse(row.data) as { subteam?: string; assigneeUids?: string[] } : null;
+  return row ? JSON.parse(row.data) as { subteam?: string; assigneeUids?: string[]; createdByUid?: string } : null;
 }
 
 async function fetchD1Profile(db: D1Database, uid: string) {

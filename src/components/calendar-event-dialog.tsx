@@ -12,7 +12,7 @@ import {
   CALENDAR_EVENT_CATEGORIES,
   CALENDAR_EVENT_META,
 } from "@/lib/calendar-event-meta";
-import type { CalendarEvent, CalendarEventCategory } from "@/types";
+import type { CalendarEvent, CalendarEventCategory, CalendarEventRecurrence } from "@/types";
 
 interface CalendarEventDialogProps {
   mode: "create" | "edit";
@@ -37,6 +37,8 @@ export function CalendarEventDialog({
   const [endDate, setEndDate] = useState(event?.endDate ?? initialDate);
   const [location, setLocation] = useState(event?.location ?? "");
   const [description, setDescription] = useState(event?.description ?? "");
+  const [recurrence, setRecurrence] = useState<CalendarEventRecurrence>(event?.recurrence ?? "none");
+  const [recurrenceUntil, setRecurrenceUntil] = useState(event?.recurrenceUntil ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +64,10 @@ export function CalendarEventDialog({
       setError("The end date cannot be before the start date.");
       return;
     }
+    if (recurrence !== "none" && (!recurrenceUntil || recurrenceUntil < startDate)) {
+      setError("Choose when the recurring series should end.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -73,6 +79,8 @@ export function CalendarEventDialog({
         endDate,
         location: location.trim(),
         description: description.trim(),
+        recurrence,
+        recurrenceUntil: recurrence === "none" ? null : recurrenceUntil,
       };
       if (mode === "create") {
         await createCalendarEvent(values, actualProfile?.uid ?? profile.uid);
@@ -131,6 +139,7 @@ export function CalendarEventDialog({
             <div className="grid gap-4 sm:grid-cols-2">
               <Detail label="Dates" value={formatEventDates(event!)} />
               <Detail label="Location" value={event?.location || "Not specified"} />
+              <Detail label="Repeats" value={formatRecurrence(event!)} />
             </div>
             {event?.description && <Detail label="Details" value={event.description} preserveLines />}
             <div className="flex justify-end border-t border-steel-line pt-4">
@@ -174,6 +183,22 @@ export function CalendarEventDialog({
                 End date
                 <input className="input mt-1" type="date" value={endDate} min={startDate} onChange={(changeEvent) => setEndDate(changeEvent.target.value)} required />
               </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Repeats
+                <select className="input mt-1" value={recurrence} onChange={(changeEvent) => setRecurrence(changeEvent.target.value as CalendarEventRecurrence)}>
+                  <option value="none">Does not repeat</option>
+                  <option value="weekly">Every week</option>
+                  <option value="monthly">Every month</option>
+                  <option value="yearly">Every year</option>
+                </select>
+              </label>
+              {recurrence !== "none" && <label className="block text-sm font-medium">
+                Repeat until
+                <input className="input mt-1" type="date" value={recurrenceUntil} min={startDate} onChange={(changeEvent) => setRecurrenceUntil(changeEvent.target.value)} required />
+              </label>}
             </div>
 
             <label className="block text-sm font-medium">
@@ -238,4 +263,10 @@ function formatDate(value: string) {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+function formatRecurrence(event: CalendarEvent) {
+  if (event.recurrence === "none") return "Does not repeat";
+  const labels: Record<Exclude<CalendarEventRecurrence, "none">, string> = { weekly: "Every week", monthly: "Every month", yearly: "Every year" };
+  return `${labels[event.recurrence]} through ${event.recurrenceUntil ? formatDate(event.recurrenceUntil) : "the configured end date"}`;
 }

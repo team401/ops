@@ -30,7 +30,7 @@
 			"binding": "DB",
 			"database_name": "team401-ops",
 			"database_id": "a2678adf-d1cd-4a21-8424-55180f5d6a95",
-			"migrations_dir": "migrations"
+			"migrations_dir": "../../migrations"
 		}
 	]
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   updatePassword,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -20,6 +21,8 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   // Already signed in with a finalized account -> go straight to the board.
   useEffect(() => {
@@ -60,6 +63,22 @@ export default function LoginPage() {
       router.replace("/board");
     } catch {
       setError("Couldn't update your password. Try signing in again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResetRequest(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setResetMessage(null);
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setResetMessage("If that address has an account, a reset link has been sent.");
+    } catch {
+      // Keep the response generic so this screen never reveals which students
+      // have accounts. Firebase may also intentionally hide that distinction.
+      setResetMessage("If that address has an account, a reset link has been sent.");
     } finally {
       setSubmitting(false);
     }
@@ -110,14 +129,14 @@ export default function LoginPage() {
   return (
     <main className="flex-1 grid-paper flex items-center justify-center px-4">
       <form
-        onSubmit={handleSignIn}
+        onSubmit={resetMode ? handleResetRequest : handleSignIn}
         className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-8 space-y-5"
       >
         <div>
           <p className="tracked-label text-xs text-blueprint mb-1">401 Ops</p>
-          <h1 className="text-xl font-semibold">Sign in</h1>
+          <h1 className="text-xl font-semibold">{resetMode ? "Reset your password" : "Sign in"}</h1>
           <p className="text-sm text-steel mt-1">
-            Use the email and password your coach gave you.
+            {resetMode ? "Enter your account email and we’ll send you a reset link." : "Use the email and password your coach gave you."}
           </p>
         </div>
         <Field label="Email">
@@ -130,7 +149,7 @@ export default function LoginPage() {
             autoComplete="email"
           />
         </Field>
-        <Field label="Password">
+        {!resetMode && <Field label="Password">
           <input
             type="password"
             value={password}
@@ -139,10 +158,14 @@ export default function LoginPage() {
             required
             autoComplete="current-password"
           />
-        </Field>
+        </Field>}
         {error && <p className="text-sm text-danger">{error}</p>}
+        {resetMessage && <p role="status" className="rounded border border-steel-line bg-surface px-3 py-2 text-sm text-steel">{resetMessage}</p>}
         <button type="submit" disabled={submitting} className="btn-primary w-full">
-          {submitting ? "Signing in…" : "Sign in"}
+          {submitting ? (resetMode ? "Sending…" : "Signing in…") : (resetMode ? "Send reset link" : "Sign in")}
+        </button>
+        <button type="button" className="w-full text-sm font-medium text-blueprint hover:underline" onClick={() => { setResetMode((current) => !current); setError(null); setResetMessage(null); }}>
+          {resetMode ? "Back to sign in" : "Forgot your password?"}
         </button>
       </form>
     </main>

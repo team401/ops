@@ -3,7 +3,7 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { Search } from "lucide-react";
-import type { Task, TaskStatus, Subteam, Certification, UserProfile } from "@/types";
+import type { Task, TaskStatus, Subteam, Certification, UserProfile, Priority } from "@/types";
 import { TASK_STATUSES } from "@/types";
 import { KanbanColumn } from "@/components/kanban-column";
 import { TaskDialog } from "@/components/task-dialog";
@@ -11,6 +11,8 @@ import { incompletePrerequisites, reorderTasks } from "@/lib/task-actions";
 import { taskMatchesSearch } from "@/lib/task-search";
 import { getCardDefault, subscribeCardDefault } from "@/lib/card-preferences";
 import { useAuth } from "@/context/auth-context";
+
+const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -59,8 +61,9 @@ export function KanbanBoard({
 
   function tasksFor(status: TaskStatus) {
     return scopedTasks.filter((task) => task.status === status).sort((a, b) => {
+      const priorityDifference = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
       const prerequisiteDifference = Number(prerequisiteIds.has(b.id)) - Number(prerequisiteIds.has(a.id));
-      return prerequisiteDifference || a.order - b.order || a.createdAt.localeCompare(b.createdAt);
+      return priorityDifference || prerequisiteDifference || a.order - b.order || a.createdAt.localeCompare(b.createdAt);
     });
   }
 
@@ -78,9 +81,14 @@ export function KanbanBoard({
     if (!TASK_STATUSES.includes(status)) return;
 
     const destinationTasks = tasksFor(status).filter((candidate) => candidate.id !== task.id);
-    if (!overTask || overTask.id === task.id) {
+    if (overTask?.id === task.id) {
       const originalIndex = tasksFor(status).findIndex((candidate) => candidate.id === task.id);
       setDragPreview({ taskId: task.id, status, index: originalIndex < 0 ? destinationTasks.length : Math.min(originalIndex, destinationTasks.length) });
+      return;
+    }
+
+    if (!overTask || overTask.priority !== task.priority) {
+      setDragPreview({ taskId: task.id, status, index: priorityGroupEnd(destinationTasks, task.priority) });
       return;
     }
 
@@ -197,4 +205,11 @@ export function KanbanBoard({
       )}
     </div>
   );
+}
+
+function priorityGroupEnd(tasks: Task[], priority: Priority) {
+  const lastMatchingIndex = tasks.findLastIndex((task) => task.priority === priority);
+  if (lastMatchingIndex >= 0) return lastMatchingIndex + 1;
+  const firstLowerPriority = tasks.findIndex((task) => PRIORITY_ORDER[task.priority] > PRIORITY_ORDER[priority]);
+  return firstLowerPriority < 0 ? tasks.length : firstLowerPriority;
 }

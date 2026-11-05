@@ -58,7 +58,8 @@ async function tasksRoute(request: Request, db: D1Database, actor: User, cors: H
   }
   if (!idPattern.test(id)) throw new Error("Invalid task ID");
   const existing = await getTask(db, id); if (!existing) throw new Error("Not found");
-  const manager = actor.role === "coach" || (actor.role === "student_leader" && actor.subteam === existing.subteam);
+  const editor = actor.role === "coach" || actor.role === "student_leader";
+  const canDelete = actor.role === "coach" || (actor.role === "student_leader" && actor.subteam === existing.subteam);
   if (pathParts[3] === "comments" && request.method === "POST") {
     const comment = await request.json<Record<string, unknown>>();
     if (typeof comment.id !== "string" || !idPattern.test(comment.id) || typeof comment.body !== "string" || !comment.body.trim() || comment.body.length > 2000 || comment.authorUid !== actor.uid || typeof comment.createdAt !== "string") throw new Error("Invalid comment");
@@ -67,17 +68,17 @@ async function tasksRoute(request: Request, db: D1Database, actor: User, cors: H
     return json(task, 200, cors);
   }
   if (pathParts[3] === "attachments" && request.method === "POST") {
-    if (!manager && !existing.assigneeUids.includes(actor.uid)) throw new Error("Forbidden");
+    if (!canEditTaskContent(existing, actor)) throw new Error("Forbidden");
     const attachment = await request.json<Record<string, unknown>>();
     if (typeof attachment.id !== "string" || typeof attachment.url !== "string" || typeof attachment.storagePath !== "string") throw new Error("Invalid attachment");
     const task = validateTask({ ...existing, attachments: [...existing.attachments, attachment], updatedAt: new Date().toISOString() });
     await taskUpsert(db, task).run();
     return json(task, 200, cors);
   }
-  if (request.method === "DELETE") { if (!manager) throw new Error("Forbidden"); await db.prepare("DELETE FROM tasks WHERE id = ?").bind(id).run(); return new Response(null, { status: 204, headers: cors }); }
+  if (request.method === "DELETE") { if (!canDelete) throw new Error("Forbidden"); await db.prepare("DELETE FROM tasks WHERE id = ?").bind(id).run(); return new Response(null, { status: 204, headers: cors }); }
   if (request.method === "PATCH") {
     const changes = await request.json<Record<string, unknown>>();
-    if (!manager && !allowedTaskPatch(existing, changes, actor)) throw new Error("Forbidden");
+    if (!editor && !allowedTaskPatch(existing, changes, actor)) throw new Error("Forbidden");
     const task = validateTask({ ...existing, ...changes, id });
     if (actor.role === "student" && task.leadersOnly) throw new Error("Forbidden");
     await taskUpsert(db, task).run(); return json(task, 200, cors);
@@ -89,6 +90,13 @@ function allowedTaskPatch(task: Task, changes: Record<string, unknown>, actor: U
   const keys = Object.keys(changes);
   const only = (allowed: string[]) => keys.every((key) => allowed.includes(key));
   if (only(["status", "order", "updatedAt", "history"])) return true;
+  const contentKeys = new Set(["title", "description"]);
+  const certificationKeys = new Set(["requiredCertificationIds", "requireAllCertifications"]);
+  if (only(["title", "description", "requiredCertificationIds", "requireAllCertifications", "updatedAt"])) {
+    const changesContent = keys.some((key) => contentKeys.has(key));
+    const changesCertifications = keys.some((key) => certificationKeys.has(key));
+    return (!changesContent || canEditTaskContent(task, actor)) && (!changesCertifications || actor.role === "student");
+  }
   if (only(["comments", "updatedAt"])) {
     const next = Array.isArray(changes.comments) ? changes.comments as Array<Record<string, unknown>> : [];
     const added = next.at(-1);
@@ -112,6 +120,11 @@ function allowedTaskPatch(task: Task, changes: Record<string, unknown>, actor: U
     return true;
   }
   return false;
+}
+
+function canEditTaskContent(task: Task, actor: User) {
+  return actor.role === "coach" || actor.role === "student_leader" || task.createdByUid === actor.uid ||
+    actor.subteam === task.subteam || task.assigneeUids.includes(actor.uid);
 }
 
 function validateTask(value: unknown): Task {

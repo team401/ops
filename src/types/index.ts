@@ -120,6 +120,8 @@ export type CalendarEventCategory =
   | "meeting"
   | "other";
 
+export type CalendarEventRecurrence = "none" | "weekly" | "monthly" | "yearly";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -128,6 +130,8 @@ export interface CalendarEvent {
   startDate: string;
   endDate: string;
   location: string;
+  recurrence: CalendarEventRecurrence;
+  recurrenceUntil: string | null;
   createdByUid: string;
   createdAt: string;
   updatedAt: string;
