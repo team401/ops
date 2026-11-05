@@ -94,6 +94,10 @@ export async function handleNotifications(request: Request, env: NotificationEnv
       FROM notifications WHERE uid = ? ORDER BY created_at DESC LIMIT 50`).bind(uid).all();
     return json(result.results, 200, cors);
   }
+  if (url.pathname === "/notifications" && request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM notifications WHERE uid = ?").bind(uid).run();
+    return new Response(null, { status: 204, headers: cors });
+  }
   if (url.pathname === "/notifications/read-all" && request.method === "POST") {
     await env.DB.prepare("UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE uid = ?").bind(new Date().toISOString(), uid).run();
     return new Response(null, { status: 204, headers: cors });

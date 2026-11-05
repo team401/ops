@@ -19,6 +19,7 @@ export const saveNotificationPreferences = (preferences: Pick<NotificationPrefer
 export const markNotificationRead = (id: string) => request<void>(`/notifications/${encodeURIComponent(id)}/read`, { method: "POST" });
 export const markAllNotificationsRead = () => request<void>("/notifications/read-all", { method: "POST" });
 export const dismissNotification = (id: string) => request<void>(`/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const dismissAllNotifications = () => request<void>("/notifications", { method: "DELETE" });
 export const savePushSubscription = (subscription: PushSubscription) => request<void>("/push-subscriptions", { method: "POST", body: JSON.stringify(subscription.toJSON()) });
 export const deletePushSubscription = (endpoint: string) => request<void>("/push-subscriptions", { method: "DELETE", body: JSON.stringify({ endpoint }) });
 export const sendNotificationEmailPreview = () => request<{ sent: boolean; taskCount: number; channels: string[] }>("/notification-email-preview", { method: "POST" });
