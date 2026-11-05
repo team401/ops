@@ -81,8 +81,9 @@ export default function AccountPage() {
     try {
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !notificationPreferences.vapidPublicKey) throw new Error("Push notifications are not available in this browser yet.");
       if (enabled) {
+        if (Notification.permission === "denied") throw new Error("Firefox has notifications blocked for this preview site. Use the permissions icon beside the address bar to allow notifications, then try again.");
         const permission = await Notification.requestPermission();
-        if (permission !== "granted") throw new Error("Allow notifications in your browser to turn on push alerts.");
+        if (permission !== "granted") throw new Error("Notification permission was not granted. In Firefox, check the permissions icon beside the address bar and allow notifications for this site.");
         await navigator.serviceWorker.register("/push-sw.js", { scope: "/", type: "classic", updateViaCache: "none" });
         const registration = await navigator.serviceWorker.ready;
         const existing = await registration.pushManager.getSubscription();
@@ -116,6 +117,7 @@ export default function AccountPage() {
     setSavingNotifications(true); setNotificationMessage("");
     try {
       const result = await sendNotificationEmailPreview();
+      if (result.channels.includes("in-app")) window.dispatchEvent(new Event("ops:notifications-changed"));
       setNotificationMessage(`Preview sent by ${result.channels.join(", ")} with ${result.taskCount} assigned task${result.taskCount === 1 ? "" : "s"}.`);
     } catch (error) { setNotificationMessage(error instanceof Error ? error.message : "The preview email could not be sent."); }
     finally { setSavingNotifications(false); }

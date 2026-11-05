@@ -18,7 +18,8 @@ export function NotificationMenu() {
     void load();
     const interval = window.setInterval(load, 30_000);
     window.addEventListener("focus", load);
-    return () => { active = false; window.clearInterval(interval); window.removeEventListener("focus", load); };
+    window.addEventListener("ops:notifications-changed", load);
+    return () => { active = false; window.clearInterval(interval); window.removeEventListener("focus", load); window.removeEventListener("ops:notifications-changed", load); };
   }, []);
 
   useEffect(() => {
