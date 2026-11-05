@@ -111,7 +111,7 @@ export default function AccountPage() {
     setSavingNotifications(true); setNotificationMessage("");
     try {
       const result = await sendNotificationEmailPreview();
-      setNotificationMessage(`Preview sent to ${currentProfile.email} with ${result.taskCount} assigned task${result.taskCount === 1 ? "" : "s"}.`);
+      setNotificationMessage(`Preview sent by ${result.channels.join(", ")} with ${result.taskCount} assigned task${result.taskCount === 1 ? "" : "s"}.`);
     } catch (error) { setNotificationMessage(error instanceof Error ? error.message : "The preview email could not be sent."); }
     finally { setSavingNotifications(false); }
   }

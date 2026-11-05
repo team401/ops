@@ -71,10 +71,19 @@ export async function handleNotifications(request: Request, env: NotificationEnv
     }
     const tasks = await assignedTasks(env.DB, uid);
     await sendDigestEmail(env, recipient, tasks, true);
+    const preferences = await readPreferences(env.DB, uid);
+    if (preferences.inAppEnabled || preferences.pushEnabled) {
+      await notifyUsers(env, [uid], {
+        type: "preview",
+        title: "Notification preview",
+        body: `Your daily summary currently includes ${tasks.length} assigned task${tasks.length === 1 ? "" : "s"}.`,
+      });
+    }
     await env.DB.prepare(`INSERT INTO notification_preferences (uid, in_app_enabled, push_enabled, email_enabled, updated_at, last_email_preview_at)
       VALUES (?, 1, 0, 0, ?, ?) ON CONFLICT(uid) DO UPDATE SET last_email_preview_at=excluded.last_email_preview_at`)
       .bind(uid, new Date().toISOString(), new Date().toISOString()).run();
-    return json({ sent: true, taskCount: tasks.length }, 200, cors);
+    const channels = ["email", ...(preferences.inAppEnabled ? ["in-app"] : []), ...(preferences.pushEnabled ? ["push"] : [])];
+    return json({ sent: true, taskCount: tasks.length, channels }, 200, cors);
   }
 
   if (url.pathname === "/notifications" && request.method === "GET") {

@@ -20,7 +20,7 @@ export const markNotificationRead = (id: string) => request<void>(`/notification
 export const markAllNotificationsRead = () => request<void>("/notifications/read-all", { method: "POST" });
 export const savePushSubscription = (subscription: PushSubscription) => request<void>("/push-subscriptions", { method: "POST", body: JSON.stringify(subscription.toJSON()) });
 export const deletePushSubscription = (endpoint: string) => request<void>("/push-subscriptions", { method: "DELETE", body: JSON.stringify({ endpoint }) });
-export const sendNotificationEmailPreview = () => request<{ sent: boolean; taskCount: number }>("/notification-email-preview", { method: "POST" });
+export const sendNotificationEmailPreview = () => request<{ sent: boolean; taskCount: number; channels: string[] }>("/notification-email-preview", { method: "POST" });
 
 export function decodeVapidPublicKey(value: string) {
   const padding = "=".repeat((4 - value.length % 4) % 4);
