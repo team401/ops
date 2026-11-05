@@ -16,7 +16,7 @@ type DigestTask = { id: string; title: string; status: string; priority: string;
 
 export function isNotificationRoute(pathname: string) {
   return pathname === "/notifications" || pathname.startsWith("/notifications/") ||
-    pathname === "/notification-preferences" || pathname === "/push-subscriptions";
+    pathname === "/notification-preferences" || pathname === "/notification-email-preview" || pathname === "/push-subscriptions";
 }
 
 export async function handleNotifications(request: Request, env: NotificationEnv, uid: string, cors: Headers) {
@@ -57,6 +57,24 @@ export async function handleNotifications(request: Request, env: NotificationEnv
       return new Response(null, { status: 204, headers: cors });
     }
     return methodNotAllowed(cors, "POST, DELETE, OPTIONS");
+  }
+
+  if (url.pathname === "/notification-email-preview") {
+    if (request.method !== "POST") return methodNotAllowed(cors, "POST, OPTIONS");
+    if (!env.RESEND_API_KEY || !env.RESEND_FROM) return json({ error: "Email delivery is not configured" }, 503, cors);
+    const recipient = await env.DB.prepare(`SELECT u.email, u.display_name AS displayName, p.last_email_preview_at AS lastPreviewAt
+      FROM users u LEFT JOIN notification_preferences p ON p.uid = u.uid WHERE u.uid = ?`)
+      .bind(uid).first<{ email: string; displayName: string; lastPreviewAt: string | null }>();
+    if (!recipient?.email) return json({ error: "Your account does not have an email address" }, 400, cors);
+    if (recipient.lastPreviewAt && Date.now() - new Date(recipient.lastPreviewAt).getTime() < 60_000) {
+      return json({ error: "Wait a minute before sending another preview" }, 429, cors);
+    }
+    const tasks = await assignedTasks(env.DB, uid);
+    await sendDigestEmail(env, recipient, tasks, true);
+    await env.DB.prepare(`INSERT INTO notification_preferences (uid, in_app_enabled, push_enabled, email_enabled, updated_at, last_email_preview_at)
+      VALUES (?, 1, 0, 0, ?, ?) ON CONFLICT(uid) DO UPDATE SET last_email_preview_at=excluded.last_email_preview_at`)
+      .bind(uid, new Date().toISOString(), new Date().toISOString()).run();
+    return json({ sent: true, taskCount: tasks.length }, 200, cors);
   }
 
   if (url.pathname === "/notifications" && request.method === "GET") {
@@ -111,32 +129,40 @@ export async function sendDailyEmailDigests(env: NotificationEnv) {
   const recipients = await env.DB.prepare(`SELECT p.uid, u.email, u.display_name AS displayName, p.last_email_digest_at AS lastDigestAt
     FROM notification_preferences p JOIN users u ON u.uid = p.uid
     WHERE p.email_enabled = 1 AND u.email <> ''`).all<{ uid: string; email: string; displayName: string; lastDigestAt: string | null }>();
-  const taskRows = await env.DB.prepare("SELECT data FROM tasks WHERE archived = 0 AND status <> 'done'").all<{ data: string }>();
-  const openTasks = taskRows.results.flatMap((row) => {
-    try { return [JSON.parse(row.data) as DigestTask]; } catch { return []; }
-  });
   const completedAt = new Date().toISOString();
   await Promise.all(recipients.results.map(async (recipient) => {
-    const tasks = openTasks.filter((task) => task.assigneeUids.includes(recipient.uid)).sort(compareDigestTasks).slice(0, 25);
+    const tasks = await assignedTasks(env.DB, recipient.uid);
     if (tasks.length === 0) {
       await markDigestComplete(env.DB, recipient.uid, completedAt);
       return;
     }
-    const dueSoonCount = tasks.filter((task) => task.dueDate && daysUntil(task.dueDate) <= 7).length;
-    const response = await fetch("https://api.resend.com/emails", {
+    await sendDigestEmail(env, recipient, tasks, false);
+    await markDigestComplete(env.DB, recipient.uid, completedAt);
+  }));
+}
+
+async function assignedTasks(db: D1Database, uid: string) {
+  const taskRows = await db.prepare("SELECT data FROM tasks WHERE archived = 0 AND status <> 'done'").all<{ data: string }>();
+  return taskRows.results.flatMap((row) => {
+    try { return [JSON.parse(row.data) as DigestTask]; } catch { return []; }
+  }).filter((task) => Array.isArray(task.assigneeUids) && task.assigneeUids.includes(uid)).sort(compareDigestTasks).slice(0, 25);
+}
+
+async function sendDigestEmail(env: NotificationEnv, recipient: { email: string; displayName: string }, tasks: DigestTask[], preview: boolean) {
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM) throw new Error("Email delivery is not configured");
+  const dueSoonCount = tasks.filter((task) => task.dueDate && daysUntil(task.dueDate) <= 7).length;
+  const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: env.RESEND_FROM,
         to: [recipient.email],
-        subject: `${tasks.length} assigned Ops task${tasks.length === 1 ? "" : "s"}${dueSoonCount ? ` · ${dueSoonCount} due soon` : ""}`,
+        subject: `${preview ? "Preview · " : ""}${tasks.length} assigned Ops task${tasks.length === 1 ? "" : "s"}${dueSoonCount ? ` · ${dueSoonCount} due soon` : ""}`,
         text: digestText(recipient.displayName, tasks),
         html: digestHtml(recipient.displayName, tasks),
       }),
     });
-    if (!response.ok) throw new Error(`Resend digest failed with ${response.status}`);
-    await markDigestComplete(env.DB, recipient.uid, completedAt);
-  }));
+  if (!response.ok) throw new Error(`Resend digest failed with ${response.status}`);
 }
 
 function markDigestComplete(db: D1Database, uid: string, completedAt: string) {
@@ -164,6 +190,7 @@ function dueLabel(dueDate: string | null) {
 }
 
 function digestText(displayName: string, tasks: DigestTask[]) {
+  if (tasks.length === 0) return `Hi ${displayName},\n\nYou have no open assigned tasks right now.\n\nOpen My Tasks: https://ops.team401.org/my-tasks`;
   const items = tasks.map((task) => `${dueLabel(task.dueDate)} — ${task.title}\n${statusLabel(task.status)} · ${task.priority} priority`).join("\n\n");
   return `Hi ${displayName},\n\nHere are your open assigned tasks, ordered by due date:\n\n${items}\n\nOpen My Tasks: https://ops.team401.org/my-tasks`;
 }
@@ -173,7 +200,8 @@ function digestHtml(displayName: string, tasks: DigestTask[]) {
     const urgent = task.dueDate && daysUntil(task.dueDate) <= 7;
     return `<div style="border-left:4px solid ${urgent ? "#a51d3d" : "#8d214d"};background:${urgent ? "#fff3f3" : "#f6f3f4"};padding:12px 14px;margin:0 0 10px"><div style="font-size:12px;font-weight:700;color:${urgent ? "#a51d3d" : "#6b6470"};text-transform:uppercase">${escapeHtml(dueLabel(task.dueDate))}</div><div style="font-size:16px;font-weight:700;margin-top:3px">${escapeHtml(task.title)}</div><div style="font-size:13px;color:#5f6268;margin-top:4px">${escapeHtml(statusLabel(task.status))} · ${escapeHtml(task.priority)} priority</div></div>`;
   }).join("");
-  return `<div style="font-family:Arial,sans-serif;color:#202428;max-width:640px"><div style="background:#70193d;color:white;padding:18px 22px;font-size:20px;font-weight:700">401 Ops</div><div style="padding:22px"><p>Hi ${escapeHtml(displayName)},</p><p>Here are your open assigned tasks. The nearest due dates are shown first.</p>${items}<p><a href="https://ops.team401.org/my-tasks" style="display:inline-block;background:#8d214d;color:white;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Open My Tasks</a></p></div></div>`;
+  const summary = tasks.length === 0 ? "You have no open assigned tasks right now." : "Here are your open assigned tasks. The nearest due dates are shown first.";
+  return `<div style="font-family:Arial,sans-serif;color:#202428;max-width:640px"><div style="background:#70193d;color:white;padding:18px 22px;font-size:20px;font-weight:700">401 Ops</div><div style="padding:22px"><p>Hi ${escapeHtml(displayName)},</p><p>${summary}</p>${items}<p><a href="https://ops.team401.org/my-tasks" style="display:inline-block;background:#8d214d;color:white;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Open My Tasks</a></p></div></div>`;
 }
 
 function statusLabel(status: string) { return ({ backlog: "Backlog", in_progress: "In progress", blocked: "Stuck", review: "In review" } as Record<string, string>)[status] ?? status; }
