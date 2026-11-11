@@ -1,11 +1,12 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { createRemoteJWKSet, jwtVerify } from "jose";
 import { handleOperations, isOperationsRoute } from "./operations";
 import { handleCore, isCoreRoute } from "./core";
 import { handleNotifications, isNotificationRoute, sendDailyEmailDigests } from "./notifications";
+import { handleAuth, isAuthRoute, type AuthEnv } from "./auth";
+import { verifyFirebaseToken } from "./firebase-auth";
 
-interface Env {
+interface Env extends AuthEnv {
   ATTACHMENTS: R2Bucket;
   DB: D1Database;
   FIREBASE_PROJECT_ID: string;
@@ -17,10 +18,6 @@ interface Env {
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
 }
-
-const firebaseKeys = createRemoteJWKSet(
-  new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
-);
 const attachmentRoute = /^\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/;
 const certificationRoute = /^\/certifications(?:\/([^/]+))?$/;
 const maxAttachmentSize = 20 * 1024 * 1024;
@@ -40,6 +37,10 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       return json({ ok: true }, 200, cors);
+    }
+
+    if (isAuthRoute(url.pathname)) {
+      return handleAuth(request, env, cors);
     }
 
     if (isCoreRoute(url.pathname)) {
@@ -216,16 +217,6 @@ function certificationUpsert(db: D1Database, certification: CertificationRow) {
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description,
       subteam = excluded.subteam, updated_at = excluded.updated_at`)
     .bind(certification.id, certification.name, certification.description, certification.subteam, new Date().toISOString());
-}
-
-async function verifyFirebaseToken(token: string, projectId: string) {
-  const { payload } = await jwtVerify(token, firebaseKeys, {
-    algorithms: ["RS256"],
-    audience: projectId,
-    issuer: `https://securetoken.google.com/${projectId}`,
-  });
-  if (!payload.sub) throw new Error("Unauthorized");
-  return payload.sub;
 }
 
 async function requireCoach(uid: string, env: Env) {

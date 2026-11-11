@@ -102,19 +102,19 @@ function allowedTaskPatch(task: Task, changes: Record<string, unknown>, actor: U
   const keys = Object.keys(changes);
   const only = (allowed: string[]) => keys.every((key) => allowed.includes(key));
   if (only(["status", "order", "updatedAt", "history"])) return true;
-  const contentKeys = new Set(["title", "description"]);
+  const contentKeys = new Set(["title", "description", "priority", "dueDate", "pointOfContactUid", "blockedReason", "blockedDetails", "prerequisiteTaskIds", "links"]);
   const certificationKeys = new Set(["requiredCertificationIds", "requireAllCertifications"]);
-  if (only(["title", "description", "requiredCertificationIds", "requireAllCertifications", "updatedAt"])) {
+  if (only([...contentKeys, ...certificationKeys, "updatedAt"])) {
     const changesContent = keys.some((key) => contentKeys.has(key));
     const changesCertifications = keys.some((key) => certificationKeys.has(key));
-    return (!changesContent || canEditTaskContent(task, actor)) && (!changesCertifications || actor.role === "student");
+    return (!changesContent || canEditTaskContent(task, actor)) && (!changesCertifications || canEditTaskContent(task, actor));
   }
   if (only(["comments", "updatedAt"])) {
     const next = Array.isArray(changes.comments) ? changes.comments as Array<Record<string, unknown>> : [];
     const added = next.at(-1);
     return next.length === task.comments.length + 1 && JSON.stringify(next.slice(0, -1)) === JSON.stringify(task.comments) && added?.authorUid === actor.uid && typeof added.body === "string" && added.body.length > 0 && added.body.length <= 2000;
   }
-  if (only(["attachments", "updatedAt"]) && task.assigneeUids.includes(actor.uid)) {
+  if (only(["attachments", "updatedAt"]) && canEditTaskContent(task, actor)) {
     const next = Array.isArray(changes.attachments) ? changes.attachments as Array<Record<string, unknown>> : [];
     const beforeIds = new Set(task.attachments.map((item) => item.id)); const afterIds = new Set(next.map((item) => item.id));
     const delta = [...new Set([...beforeIds, ...afterIds])].filter((id) => beforeIds.has(id) !== afterIds.has(id));
@@ -124,6 +124,7 @@ function allowedTaskPatch(task: Task, changes: Record<string, unknown>, actor: U
     const next = Array.isArray(changes.assigneeUids) ? changes.assigneeUids.filter((value): value is string => typeof value === "string") : [];
     const before = new Set(task.assigneeUids); const after = new Set(next);
     const changed = [...new Set([...before, ...after])].filter((uid) => before.has(uid) !== after.has(uid));
+    if (canEditTaskContent(task, actor)) return true;
     if (changed.length !== 1 || changed[0] !== actor.uid) return false;
     if (!before.has(actor.uid) && after.has(actor.uid)) {
       const required = Array.isArray(task.requiredCertificationIds) ? task.requiredCertificationIds.filter((id): id is string => typeof id === "string") : [];
