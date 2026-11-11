@@ -7,7 +7,7 @@ Team 401's operations hub for projects, assignments, certifications, attendance,
 - Full-team and subteam Kanban boards
 - Certification-aware task assignment
 - Task comments, links, prerequisites, images, and file attachments
-- Calendar events and task deadlines
+- Recurring calendar events and task deadlines
 - Coach-managed attendance and kiosk timeclock
 - Student reports, team metrics, and CSV exports
 - Coach roster, account, PIN, and certification administration
@@ -81,6 +81,16 @@ Removing a roster profile immediately removes application access but does not de
 Cloudflare Pages builds with `npm run build` and publishes `out`. Configure the Firebase Auth variables above plus `NEXT_PUBLIC_OPS_API_URL` in both production and preview environments.
 
 `workers/api/wrangler.jsonc` defines the `team401-ops-api` Worker, shared D1 database, R2 bucket, allowed browser origins, and `api.ops.team401.org` custom domain.
+
+Password reset and QR device sign-in use the same Firebase project as normal login. The Worker requires these secrets:
+
+```text
+FIREBASE_WEB_API_KEY
+FIREBASE_SERVICE_ACCOUNT_EMAIL
+FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY
+```
+
+The web API key is the same public Firebase key used by `NEXT_PUBLIC_FIREBASE_API_KEY`. The service-account email and PKCS#8 private key come from a Firebase Admin service-account JSON key and must only be stored as Cloudflare Worker secrets. Apply D1 migrations before deploying the Worker. In Firebase Authentication → Templates → Password reset, set the custom action URL to `https://ops.team401.org/login` so reset links finish inside Ops.
 
 Renovate targets `staging`. Routine non-major updates may auto-merge only after validation succeeds. Promotion to `main` remains manual.
 
