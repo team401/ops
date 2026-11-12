@@ -7,7 +7,7 @@ import { withBasePath } from "@/lib/base-path";
 
 function isPublicPath(pathname: string) {
   const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  return normalized === "/" || normalized === "/login";
+  return normalized === "/" || normalized === "/login" || normalized === "/device-link";
 }
 
 export function AuthRouteGuard({ children }: { children: ReactNode }) {

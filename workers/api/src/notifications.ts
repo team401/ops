@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 
 export interface NotificationEnv {
   DB: D1Database;
@@ -123,13 +123,13 @@ export async function notifyUsers(env: NotificationEnv, recipientUids: string[],
     VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`).bind(crypto.randomUUID(), uid, notification.type, notification.title, notification.body, notification.taskId ?? null, createdAt)));
 
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return;
-  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   const placeholders = uniqueUids.map(() => "?").join(",");
   const subscriptions = await env.DB.prepare(`SELECT endpoint, uid, p256dh, auth FROM push_subscriptions
     WHERE uid IN (${placeholders}) AND uid IN (SELECT uid FROM notification_preferences WHERE push_enabled = 1)`).bind(...uniqueUids).all<{ endpoint: string; uid: string; p256dh: string; auth: string }>();
   await Promise.all(subscriptions.results.map(async (subscription) => {
     try {
-      await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(notification));
+      await sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(notification));
     } catch (error) {
       const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : 0;
       if (statusCode === 404 || statusCode === 410) await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(subscription.endpoint).run();
