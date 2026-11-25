@@ -56,8 +56,8 @@ export async function centralPasswordSignIn(email: string, password: string) {
   const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
   const challenge = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
   const state = base64Url(crypto.getRandomValues(new Uint8Array(24)));
-  const staging = location.hostname.startsWith("staging.") || location.hostname === "localhost";
-  const authOrigin = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ?? (staging ? "https://auth-staging.team401.org" : "https://auth.team401.org");
+  const production = location.hostname === "ops.team401.org";
+  const authOrigin = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ?? (production ? "https://auth.team401.org" : "https://auth-staging.team401.org");
   const redirectUri = `${location.origin}/auth/callback`;
   const authorization = await fetch(`${authOrigin}/api/in-situ/login`, {
     method: "POST",
