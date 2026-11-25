@@ -13,7 +13,7 @@ import QRCode from "qrcode";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
 import { fetchUser, saveUser } from "@/lib/core-api";
-import { beginDeviceLink, pollDeviceLink, requestPasswordReset, type DeviceLinkStart } from "@/lib/auth-api";
+import { beginDeviceLink, centralPasswordSignIn, pollDeviceLink, requestPasswordReset, type DeviceLinkStart } from "@/lib/auth-api";
 
 export default function LoginPage() {
   const { firebaseUser, profile, loading } = useAuth();
@@ -70,7 +70,8 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const result = await centralPasswordSignIn(email, password);
+      await signInWithCustomToken(auth, result.customToken);
     } catch {
       setError("That email or password wasn't recognized. Check with your coach if you're not sure.");
     } finally {

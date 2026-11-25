@@ -47,3 +47,27 @@ export function respondToDeviceLink(id: string, token: string, approve: boolean)
     body: JSON.stringify({ id, token }),
   }, true);
 }
+
+function base64Url(bytes: Uint8Array) {
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+export async function centralPasswordSignIn(email: string, password: string) {
+  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+  const state = base64Url(crypto.getRandomValues(new Uint8Array(24)));
+  const staging = location.hostname.startsWith("staging.") || location.hostname === "localhost";
+  const authOrigin = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ?? (staging ? "https://auth-staging.team401.org" : "https://auth.team401.org");
+  const redirectUri = `${location.origin}/auth/callback`;
+  const authorization = await fetch(`${authOrigin}/api/in-situ/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ application: "ops", email, password, redirectUri, state, codeChallenge: challenge }),
+  });
+  const result = await authorization.json().catch(() => null) as { code?: string; state?: string } | null;
+  if (!authorization.ok || !result?.code || result.state !== state) throw new Error("Invalid email or password.");
+  return request<{ customToken: string }>("/auth/central-exchange", {
+    method: "POST",
+    body: JSON.stringify({ code: result.code, codeVerifier: verifier, redirectUri }),
+  });
+}

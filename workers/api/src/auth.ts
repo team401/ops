@@ -8,6 +8,8 @@ export interface AuthEnv {
   FIREBASE_WEB_API_KEY?: string;
   FIREBASE_SERVICE_ACCOUNT_EMAIL?: string;
   FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
+  AUTH_SERVICE_URL?: string;
+  AUTH_CLIENT_SECRET?: string;
 }
 
 const linkLifetimeMs = 5 * 60 * 1000;
@@ -15,13 +17,14 @@ const idPattern = /^[0-9a-f-]{36}$/i;
 const tokenPattern = /^[A-Za-z0-9_-]{40,100}$/;
 
 export function isAuthRoute(path: string) {
-  return path === "/auth/password-reset" || path === "/auth/device-link";
+  return path === "/auth/password-reset" || path === "/auth/device-link" || path === "/auth/central-exchange";
 }
 
 export async function handleAuth(request: Request, env: AuthEnv, cors: Headers) {
   try {
     const path = new URL(request.url).pathname;
     if (path === "/auth/password-reset") return passwordReset(request, env, cors);
+    if (path === "/auth/central-exchange") return centralExchange(request, env, cors);
     return deviceLink(request, env, cors);
   } catch (error) {
     console.error("Auth request failed", error);
@@ -29,6 +32,32 @@ export async function handleAuth(request: Request, env: AuthEnv, cors: Headers) 
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : message.includes("not configured") ? 503 : message.startsWith("Invalid") ? 400 : message.includes("expired") || message.includes("used") || message.includes("denied") || message.includes("already answered") ? 410 : 500;
     return json({ error: status === 500 ? "Authentication request failed" : message }, status, cors);
   }
+}
+
+async function centralExchange(request: Request, env: AuthEnv, cors: Headers) {
+  if (request.method !== "POST") return methodNotAllowed(cors, "POST, OPTIONS");
+  if (!env.AUTH_SERVICE_URL || !env.AUTH_CLIENT_SECRET || !env.FIREBASE_SERVICE_ACCOUNT_EMAIL || !env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY)
+    throw new Error("Central authentication is not configured");
+  const body = await request.json().catch(() => ({})) as { code?: unknown; codeVerifier?: unknown; redirectUri?: unknown };
+  const code = typeof body.code === "string" ? body.code : "";
+  const codeVerifier = typeof body.codeVerifier === "string" ? body.codeVerifier : "";
+  const redirectUri = typeof body.redirectUri === "string" ? body.redirectUri : "";
+  if (!code || !codeVerifier || !redirectUri) throw new Error("Invalid central sign-in response");
+  const response = await fetch(new URL("/api/exchange", env.AUTH_SERVICE_URL), {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.AUTH_CLIENT_SECRET}`, "content-type": "application/json" },
+    body: JSON.stringify({ code, codeVerifier, redirectUri, application: "ops" }),
+  });
+  const identity = await response.json().catch(() => ({})) as { firebaseUid?: string };
+  if (!response.ok || !identity.firebaseUid) throw new Error("Invalid central sign-in response");
+  const profile = await env.DB.prepare("SELECT uid FROM users WHERE uid = ?").bind(identity.firebaseUid).first();
+  if (!profile) throw new Error("Forbidden");
+  const customToken = await createFirebaseCustomToken(
+    identity.firebaseUid,
+    env.FIREBASE_SERVICE_ACCOUNT_EMAIL,
+    env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY,
+  );
+  return json({ customToken }, 200, cors);
 }
 
 async function passwordReset(request: Request, env: AuthEnv, cors: Headers) {

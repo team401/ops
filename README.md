@@ -41,6 +41,7 @@ NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=team-401.firebaseapp.com
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=team-401
 NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org
+NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-staging.team401.org
 ```
 
 Firebase web configuration identifies the Auth application and is intentionally available to the browser. Application authorization is enforced by the Worker API.
@@ -88,6 +89,7 @@ Password reset and QR device sign-in use the same Firebase project as normal log
 FIREBASE_WEB_API_KEY
 FIREBASE_SERVICE_ACCOUNT_EMAIL
 FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY
+AUTH_CLIENT_SECRET
 ```
 
 The web API key is the same public Firebase key used by `NEXT_PUBLIC_FIREBASE_API_KEY`. The service-account email and PKCS#8 private key come from a Firebase Admin service-account JSON key and must only be stored as Cloudflare Worker secrets. Apply D1 migrations before deploying the Worker. In Firebase Authentication → Templates → Password reset, set the custom action URL to `https://ops.team401.org/login` so reset links finish inside Ops.
