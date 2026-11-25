@@ -10,6 +10,7 @@ export interface AuthEnv {
   FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
   AUTH_SERVICE_URL?: string;
   AUTH_CLIENT_SECRET?: string;
+  AUTH_STAGING_CLIENT_SECRET?: string;
 }
 
 const linkLifetimeMs = 5 * 60 * 1000;
@@ -36,16 +37,21 @@ export async function handleAuth(request: Request, env: AuthEnv, cors: Headers) 
 
 async function centralExchange(request: Request, env: AuthEnv, cors: Headers) {
   if (request.method !== "POST") return methodNotAllowed(cors, "POST, OPTIONS");
-  if (!env.AUTH_SERVICE_URL || !env.AUTH_CLIENT_SECRET || !env.FIREBASE_SERVICE_ACCOUNT_EMAIL || !env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY)
+  if (!env.AUTH_SERVICE_URL || !env.AUTH_CLIENT_SECRET || !env.AUTH_STAGING_CLIENT_SECRET || !env.FIREBASE_SERVICE_ACCOUNT_EMAIL || !env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY)
     throw new Error("Central authentication is not configured");
   const body = await request.json().catch(() => ({})) as { code?: unknown; codeVerifier?: unknown; redirectUri?: unknown };
   const code = typeof body.code === "string" ? body.code : "";
   const codeVerifier = typeof body.codeVerifier === "string" ? body.codeVerifier : "";
   const redirectUri = typeof body.redirectUri === "string" ? body.redirectUri : "";
   if (!code || !codeVerifier || !redirectUri) throw new Error("Invalid central sign-in response");
-  const response = await fetch(new URL("/api/exchange", env.AUTH_SERVICE_URL), {
+  const staging = redirectUri === "https://staging.ops.team401.org/auth/callback";
+  const production = redirectUri === "https://ops.team401.org/auth/callback";
+  if (!staging && !production) throw new Error("Invalid central sign-in response");
+  const authServiceUrl = staging ? "https://auth-staging.team401.org" : env.AUTH_SERVICE_URL;
+  const clientSecret = staging ? env.AUTH_STAGING_CLIENT_SECRET : env.AUTH_CLIENT_SECRET;
+  const response = await fetch(new URL("/api/exchange", authServiceUrl), {
     method: "POST",
-    headers: { authorization: `Bearer ${env.AUTH_CLIENT_SECRET}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${clientSecret}`, "content-type": "application/json" },
     body: JSON.stringify({ code, codeVerifier, redirectUri, application: "ops" }),
   });
   const identity = await response.json().catch(() => ({})) as { firebaseUid?: string };
