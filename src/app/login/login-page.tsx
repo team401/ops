@@ -11,8 +11,7 @@ import {
 } from "firebase/auth";
 import QRCode from "qrcode";
 import { Team401SignIn } from "@team401/web-ui";
-import "@team401/web-ui/tokens.css";
-import "@team401/web-ui/auth.css";
+import "@team401/web-ui/styles.css";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
 import { fetchUser, saveUser } from "@/lib/core-api";
