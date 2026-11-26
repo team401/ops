@@ -10,17 +10,19 @@ import {
   verifyPasswordResetCode,
 } from "firebase/auth";
 import QRCode from "qrcode";
+import { Team401SignIn } from "@team401/web-ui";
+import "@team401/web-ui/tokens.css";
+import "@team401/web-ui/auth.css";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/auth-context";
 import { fetchUser, saveUser } from "@/lib/core-api";
-import { beginDeviceLink, centralPasswordSignIn, pollDeviceLink, requestPasswordReset, type DeviceLinkStart } from "@/lib/auth-api";
+import { beginDeviceLink, completeCentralSignIn, pollDeviceLink, requestPasswordReset, type DeviceLinkStart } from "@/lib/auth-api";
 
 export default function LoginPage() {
   const { firebaseUser, profile, loading } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,20 +66,6 @@ export default function LoginPage() {
       }).finally(() => setCheckingResetCode(false));
     });
   }, []);
-
-  async function handleSignIn(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      const result = await centralPasswordSignIn(email, password);
-      await signInWithCustomToken(auth, result.customToken);
-    } catch {
-      setError("That email or password wasn't recognized. Check with your coach if you're not sure.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   async function handlePasswordReset(e: FormEvent) {
     e.preventDefault();
@@ -236,10 +224,37 @@ export default function LoginPage() {
     );
   }
 
+  if (!resetMode && !qrMode) {
+    return (
+      <main className="flex-1 grid-paper flex items-center justify-center px-4">
+        <div className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-8 space-y-4">
+          <Team401SignIn
+            application="ops"
+            authOrigin={process.env.NEXT_PUBLIC_AUTH_SERVICE_URL}
+            completeSignIn={async (authorization) => {
+              const result = await completeCentralSignIn(authorization);
+              await signInWithCustomToken(auth, result.customToken);
+            }}
+            onAuthenticated={() => router.replace(destination())}
+            onForgotPassword={() => {
+              setError(null);
+              setResetMessage(null);
+              setResetMode(true);
+            }}
+            heading="401 Ops"
+          />
+          <button type="button" className="btn-secondary w-full" onClick={() => void beginQrSignIn()}>
+            Sign in with a QR code
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="flex-1 grid-paper flex items-center justify-center px-4">
       <form
-        onSubmit={qrMode ? (event) => event.preventDefault() : resetMode ? handleResetRequest : handleSignIn}
+        onSubmit={qrMode ? (event) => event.preventDefault() : handleResetRequest}
         className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-8 space-y-5"
       >
         <div>
@@ -257,16 +272,6 @@ export default function LoginPage() {
             className="input"
             required
             autoComplete="email"
-          />
-        </Field>}
-        {!resetMode && !qrMode && <Field label="Password">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input"
-            required
-            autoComplete="current-password"
           />
         </Field>}
         {qrMode ? <>

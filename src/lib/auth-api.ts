@@ -1,4 +1,5 @@
 import { auth } from "@/lib/firebase";
+import type { AuthorizationExchange } from "@team401/web-ui";
 
 const baseUrl = () => process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
 
@@ -48,26 +49,9 @@ export function respondToDeviceLink(id: string, token: string, approve: boolean)
   }, true);
 }
 
-function base64Url(bytes: Uint8Array) {
-  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
-}
-
-export async function centralPasswordSignIn(email: string, password: string) {
-  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
-  const state = base64Url(crypto.getRandomValues(new Uint8Array(24)));
-  const production = location.hostname === "ops.team401.org";
-  const authOrigin = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ?? (production ? "https://auth.team401.org" : "https://auth-staging.team401.org");
-  const redirectUri = `${location.origin}/auth/callback`;
-  const authorization = await fetch(`${authOrigin}/api/in-situ/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ application: "ops", email, password, redirectUri, state, codeChallenge: challenge }),
-  });
-  const result = await authorization.json().catch(() => null) as { code?: string; state?: string } | null;
-  if (!authorization.ok || !result?.code || result.state !== state) throw new Error("Invalid email or password.");
+export function completeCentralSignIn({ code, codeVerifier, redirectUri }: AuthorizationExchange) {
   return request<{ customToken: string }>("/auth/central-exchange", {
     method: "POST",
-    body: JSON.stringify({ code: result.code, codeVerifier: verifier, redirectUri }),
+    body: JSON.stringify({ code, codeVerifier, redirectUri }),
   });
 }
