@@ -17,7 +17,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-query": "^5.101.4",
-    "@team401/web-ui": "github:team401/web-ui#a6b52bc",
+    "@team401/web-ui": "github:team401/web-ui#d994653",
     "@types/papaparse": "^5.5.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
