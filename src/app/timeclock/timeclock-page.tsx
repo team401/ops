@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { EmailAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { AppShell } from "@/components/app-shell";
 import { ModalBackdrop } from "@/components/modal-backdrop";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { durationMs, formatDuration } from "@/components/personal-time-report";
 import { useAuth } from "@/context/auth-context";
-import { auth } from "@/lib/firebase";
 import { useTimeEntries, useUsers } from "@/lib/hooks";
 import {
   clearKioskSession,
@@ -343,74 +341,34 @@ function Kiosk({
 }
 
 function KioskExit({ onCancel, onExit }: { onCancel: () => void; onExit: () => void }) {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const currentUser = auth.currentUser;
-    if (!currentUser?.email) {
-      setError("The current Firebase account has no email address. Use the safe sign-out option below.");
-      return;
-    }
-    setChecking(true);
-    setError(null);
-    try {
-      // Use the email from Firebase Authentication itself. The profile email
-      // can become stale if an account is changed in the Firebase console.
-      await reauthenticateWithCredential(currentUser, EmailAuthProvider.credential(currentUser.email, password));
-      onExit();
-    } catch (caught) {
-      const code = (caught as { code?: string }).code ?? "";
-      if (["auth/invalid-credential", "auth/wrong-password", "auth/user-mismatch"].includes(code)) {
-        setError("That password does not match the currently signed-in coach account.");
-      } else if (code === "auth/network-request-failed") {
-        setError("The kiosk could not reach Firebase. Check the internet connection and try again.");
-      } else if (code === "auth/too-many-requests") {
-        setError("Firebase temporarily blocked password attempts. Wait a moment or use safe sign-out.");
-      } else {
-        setError(`Firebase could not verify this account${code ? ` (${code})` : ""}. Use safe sign-out below.`);
-      }
-    } finally {
-      setChecking(false);
-    }
-  }
+  const { signOut } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  async function safeSignOut() {
-    setChecking(true);
-    setError(null);
+  async function exit() {
+    setBusy(true);
+    setError("");
     try {
-      await firebaseSignOut(auth);
+      await signOut();
       onExit();
     } catch {
-      setError("Firebase could not sign the coach account out. Check the internet connection and try again.");
-      setChecking(false);
+      setError("Ops could not sign out. Check the connection and try again.");
+      setBusy(false);
     }
   }
-  return (
-    <ModalBackdrop onClose={onCancel}>
-      <form onSubmit={submit} className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-6 space-y-4">
-        <div>
-          <h2 className="tracked-label text-xs text-blueprint font-bold">Exit kiosk mode</h2>
-          <p className="text-xs text-steel mt-1">Enter the currently signed-in coach&apos;s password to return to the app.</p>
-        </div>
-        <input type="password" className="input" value={password} onChange={(event) => setPassword(event.target.value)} autoFocus autoComplete="current-password" placeholder="Coach password" />
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <div className="flex gap-2">
-          <button type="submit" disabled={!password || checking} className="btn-primary">{checking ? "Checking…" : "Exit kiosk"}</button>
-          <button type="button" onClick={onCancel} className="btn-secondary">Cancel</button>
-        </div>
-        <div className="border-t border-steel-line pt-4">
-          <button type="button" onClick={safeSignOut} disabled={checking} className="text-danger text-sm font-medium">
-            Sign coach out and exit kiosk
-          </button>
-          <p className="text-[10px] text-steel mt-1">This always returns the device to the login screen, so it cannot expose coach access.</p>
-        </div>
-      </form>
-    </ModalBackdrop>
-  );
-}
 
+  return <ModalBackdrop onClose={onCancel}>
+    <div className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-6 space-y-4">
+      <h2 className="font-semibold">Exit kiosk mode</h2>
+      <p className="text-sm text-steel">Sign out the coach account to return this device to the sign-in screen.</p>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => void exit()}>{busy ? "Signing out…" : "Sign out and exit"}</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  </ModalBackdrop>;
+}
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });

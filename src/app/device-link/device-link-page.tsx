@@ -6,7 +6,7 @@ import { useAuth } from "@/context/auth-context";
 import { respondToDeviceLink } from "@/lib/auth-api";
 
 export default function DeviceLinkPage() {
-  const { firebaseUser, profile, loading } = useAuth();
+  const { authUser, profile, loading } = useAuth();
   const [credentials, setCredentials] = useState<{ id: string; token: string } | null>(null);
   const [returnPath, setReturnPath] = useState("/device-link");
   const [working, setWorking] = useState<"approve" | "deny" | null>(null);
@@ -44,7 +44,7 @@ export default function DeviceLinkPage() {
       {loading ? <p className="text-sm text-steel">Checking your account…</p> : decision ? <>
         <p className="text-sm font-medium">{decision === "approved" ? "Approved. The other device will sign in automatically." : "Denied. The other device was not signed in."}</p>
         <p className="text-sm text-steel">You can close this page.</p>
-      </> : !firebaseUser || !profile ? <>
+      </> : !authUser || !profile ? <>
         <p className="text-sm text-steel">Sign in on this device first, then approve the new device.</p>
         <Link className="btn-primary block text-center" href={`/login?next=${encodeURIComponent(returnPath)}`}>Sign in</Link>
       </> : <>

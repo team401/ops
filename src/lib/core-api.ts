@@ -1,8 +1,7 @@
-import { auth } from "@/lib/firebase";
+import { apiRequest } from "@/lib/api-request";
 import type { Task, UserProfile } from "@/types";
 
-const baseUrl = () => process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
-async function request<T>(path: string, init?: RequestInit): Promise<T> { const token = await auth.currentUser?.getIdToken(); if (!baseUrl() || !token) throw new Error("The Ops data service is unavailable."); const response = await fetch(`${baseUrl()}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init?.headers } }); if (response.status === 204) return undefined as T; const body = await response.json() as T & { error?: string }; if (!response.ok) throw new Error(body.error ?? "The Ops data request failed."); return body; }
+const request = apiRequest;
 const changed = (domain: string) => window.dispatchEvent(new Event(`ops:${domain}-changed`));
 export const fetchUsers = () => request<UserProfile[]>("/users");
 export const fetchUser = (uid: string) => request<UserProfile>(`/users/${encodeURIComponent(uid)}`);

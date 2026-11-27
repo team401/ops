@@ -11,10 +11,10 @@ function isPublicPath(pathname: string) {
 }
 
 export function AuthRouteGuard({ children }: { children: ReactNode }) {
-  const { firebaseUser, loading } = useAuth();
+  const { authUser, loading } = useAuth();
   const pathname = usePathname();
   const publicPath = isPublicPath(pathname);
-  const mustSignIn = !loading && !firebaseUser && !publicPath;
+  const mustSignIn = !loading && !authUser && !publicPath;
 
   useEffect(() => {
     if (mustSignIn) window.location.replace(withBasePath("/login/"));

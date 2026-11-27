@@ -1,20 +1,13 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode,
-} from "react";
-import { onAuthStateChanged, signOut as firebaseSignOut, User } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { UserProfile, Subteam } from "@/types";
 import { registerDeviceSession, removeCurrentDeviceSession, watchDeviceRevocation } from "@/lib/device-sessions";
 import { fetchUser } from "@/lib/core-api";
+import { fetchAuthSession, signOutSession, type AuthUser } from "@/lib/auth-api";
 
 interface AuthContextValue {
-  firebaseUser: User | null;
+  authUser: AuthUser | null;
   actualProfile: UserProfile | null;
   profile: UserProfile | null;
   loading: boolean;
@@ -22,9 +15,9 @@ interface AuthContextValue {
   isActualCoach: boolean;
   isStudentLeader: boolean;
   isSimulating: boolean;
+  refreshSession: () => Promise<AuthUser | null>;
   startSimulation: (uid: string) => void;
   stopSimulation: () => void;
-  // True for coach, or student leader within their own subteam.
   canManageSubteam: (subteam: Subteam) => boolean;
   signOut: () => Promise<void>;
 }
@@ -32,7 +25,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [actualProfile, setActualProfile] = useState<UserProfile | null>(null);
   const [simulatedProfile, setSimulatedProfile] = useState<UserProfile | null>(null);
   const [simulationUid, setSimulationUid] = useState<string | null>(() =>
@@ -41,30 +34,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // Track Firebase Auth session.
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setAuthLoading(false);
-      if (!user) {
-        setActualProfile(null);
-        setSimulatedProfile(null);
-        setSimulationUid(null);
-        window.sessionStorage.removeItem("ops-simulation-uid");
-        setProfileLoading(false);
-      } else {
-        setProfileLoading(true);
-      }
-    });
-    return unsub;
+  const refreshSession = useCallback(async () => {
+    const user = await fetchAuthSession();
+    setAuthUser(user);
+    setAuthLoading(false);
+    if (!user) {
+      setActualProfile(null);
+      setSimulatedProfile(null);
+      setSimulationUid(null);
+      window.sessionStorage.removeItem("ops-simulation-uid");
+      setProfileLoading(false);
+    } else {
+      setProfileLoading(true);
+    }
+    return user;
   }, []);
 
-  // Refresh the D1 profile periodically so role/cert changes made by a coach
-  // appear without the student needing to sign in again.
+  useEffect(() => { queueMicrotask(() => void refreshSession()); }, [refreshSession]);
+
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!authUser) return;
     let active = true;
-    const load = () => fetchUser(firebaseUser.uid).then((nextProfile) => {
+    const load = () => fetchUser(authUser.uid).then((nextProfile) => {
       if (!active) return;
       setActualProfile(nextProfile);
       if (nextProfile?.role !== "coach") {
@@ -78,29 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const interval = window.setInterval(load, 60_000);
     window.addEventListener("ops:users-changed", load);
     return () => { active = false; window.clearInterval(interval); window.removeEventListener("ops:users-changed", load); };
-  }, [firebaseUser]);
+  }, [authUser]);
 
-  // Simulation changes presentation and UI permissions only. API authorization
-  // continues to use the real signed-in coach.
   useEffect(() => {
-    if (!simulationUid || actualProfile?.role !== "coach") {
-      return;
-    }
+    if (!simulationUid || actualProfile?.role !== "coach") return;
     let active = true;
     fetchUser(simulationUid).then((profile) => { if (active) setSimulatedProfile(profile); }).catch(() => stopSimulation());
     return () => { active = false; };
   }, [actualProfile?.role, simulationUid]);
-
-  useEffect(() => {
-    if (!firebaseUser) return;
-    let unsubscribe = () => {};
-    let cancelled = false;
-    registerDeviceSession(firebaseUser.uid).then((deviceId) => {
-      if (cancelled) return;
-      unsubscribe = watchDeviceRevocation(firebaseUser.uid, deviceId, () => firebaseSignOut(auth));
-    }).catch(() => undefined);
-    return () => { cancelled = true; unsubscribe(); };
-  }, [firebaseUser]);
 
   const profile = simulationUid ? simulatedProfile : actualProfile;
   const isCoach = profile?.role === "coach";
@@ -113,10 +89,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return isStudentLeader && profile?.subteam === subteam;
   }
 
-  async function signOut() {
-    if (firebaseUser) await removeCurrentDeviceSession(firebaseUser.uid);
-    await firebaseSignOut(auth);
-  }
+  const signOut = useCallback(async () => {
+    if (authUser) await removeCurrentDeviceSession(authUser.uid).catch(() => undefined);
+    await signOutSession();
+    setAuthUser(null);
+    setActualProfile(null);
+    setSimulatedProfile(null);
+    setSimulationUid(null);
+    window.sessionStorage.removeItem("ops-simulation-uid");
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    let unsubscribe = () => {};
+    let cancelled = false;
+    registerDeviceSession(authUser.uid).then((deviceId) => {
+      if (!cancelled) unsubscribe = watchDeviceRevocation(authUser.uid, deviceId, () => { void signOut().catch(() => undefined); });
+    }).catch(() => undefined);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [authUser, signOut]);
 
   function startSimulation(uid: string) {
     if (!isActualCoach || uid === actualProfile?.uid) return;
@@ -131,26 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.sessionStorage.removeItem("ops-simulation-uid");
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        firebaseUser,
-        actualProfile,
-        profile,
-        loading: authLoading || profileLoading || Boolean(simulationUid && !simulatedProfile),
-        isCoach,
-        isActualCoach,
-        isStudentLeader,
-        isSimulating,
-        startSimulation,
-        stopSimulation,
-        canManageSubteam,
-        signOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ authUser, actualProfile, profile, loading: authLoading || profileLoading || Boolean(simulationUid && !simulatedProfile), isCoach, isActualCoach, isStudentLeader, isSimulating, refreshSession, startSimulation, stopSimulation, canManageSubteam, signOut }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
