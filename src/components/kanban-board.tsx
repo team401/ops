@@ -12,6 +12,7 @@ import { taskMatchesSearch } from "@/lib/task-search";
 import { getCardDefault, subscribeCardDefault } from "@/lib/card-preferences";
 import { useAuth } from "@/context/auth-context";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
+import { Alert, Button, Input } from "@team401/web-ui";
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
@@ -147,15 +148,15 @@ export function KanbanBoard({
         </p>
         <label className="relative min-w-[12rem] flex-1 sm:max-w-xs">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-steel" />
-          <input type="search" className="input input-with-icon py-1.5" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks…" aria-label="Search tasks" />
+          <Input type="search" className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks…" aria-label="Search tasks" />
         </label>
         {canCreateHere && (
-          <button onClick={() => setCreating(true)} className="btn-primary ml-auto text-sm">
+          <Button onClick={() => setCreating(true)} className="ml-auto">
             + New task
-          </button>
+          </Button>
         )}
       </div>
-      {dragError && <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"><span>{dragError}</span><button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold">Dismiss</button></div>}
+      {dragError && <Alert tone="danger" className="mb-3 flex items-start justify-between gap-3"><span>{dragError}</span><Button type="button" variant="link" onClick={() => setDragError(null)}>Dismiss</Button></Alert>}
 
       <DndContext
         sensors={sensors}

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createPortal } from "react-dom";
-import { ModalBackdrop } from "@/components/modal-backdrop";
+import { Alert, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@team401/web-ui";
 
 export function ConfirmDialog({
   title,
@@ -21,8 +20,6 @@ export function ConfirmDialog({
 }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (typeof document === "undefined") return null;
-
   async function handleConfirm() {
     setWorking(true);
     setError(null);
@@ -35,18 +32,19 @@ export function ConfirmDialog({
     }
   }
 
-  return createPortal(
-    <ModalBackdrop onClose={() => { if (!working) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" className="w-full max-w-sm rounded-lg border border-steel-line bg-paper-raised p-5 text-ink shadow-xl">
-        <h2 id="confirm-dialog-title" className="text-lg font-semibold">{title}</h2>
-        <p className="mt-2 text-sm text-steel">{description}</p>
-        {error && <p className="mt-3 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" disabled={working} onClick={onClose} className="btn-secondary">Cancel</button>
-          <button type="button" disabled={working} onClick={handleConfirm} className={destructive ? "btn-danger" : "btn-primary"}>{working ? "Working…" : confirmLabel}</button>
-        </div>
-      </section>
-    </ModalBackdrop>,
-    document.body,
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !working) onClose(); }}>
+      <DialogContent className="max-w-sm" showCloseButton={!working}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {error && <Alert tone="danger">{error}</Alert>}
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={working} onClick={onClose}>Cancel</Button>
+          <Button type="button" variant={destructive ? "danger" : "primary"} busy={working} disabled={working} onClick={handleConfirm}>{working ? "Working…" : confirmLabel}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

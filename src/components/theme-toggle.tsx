@@ -18,6 +18,7 @@ export function ThemeToggle() {
   function toggleTheme() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
+    document.documentElement.classList.toggle("dark", next === "dark");
     localStorage.setItem("team401-theme", next);
     setTheme(next);
   }

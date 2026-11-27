@@ -8,6 +8,7 @@ import { archiveTask, restoreTask, createTask, updateTask, deleteTask, leaveTask
 import { useAuth } from "@/context/auth-context";
 import { UserPicker } from "@/components/user-picker";
 import { ModalBackdrop } from "@/components/modal-backdrop";
+import { AttachmentImage } from "@/components/attachment-image";
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: "Backlog",
@@ -693,14 +694,7 @@ export function TaskDialog({
                 <div key={attachment.id} className="text-sm">
                   {attachment.contentType.startsWith("image/") && (
                     <a href={attachment.url} target="_blank" rel="noreferrer" className="mb-2 block">
-                      {/* Attachments are served from the authenticated R2-backed API. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={attachment.url}
-                        alt={attachment.name}
-                        className="max-h-80 w-full rounded-md bg-surface object-contain"
-                        loading="lazy"
-                      />
+                      <AttachmentImage src={attachment.url} alt={attachment.name} variant="detail" />
                     </a>
                   )}
                   <div className="flex items-center gap-2">

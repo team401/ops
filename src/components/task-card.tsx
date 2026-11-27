@@ -9,6 +9,7 @@ import type { Task, Certification, UserProfile } from "@/types";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { useAuth } from "@/context/auth-context";
 import { claimTask, incompletePrerequisites } from "@/lib/task-actions";
+import { AttachmentImage } from "@/components/attachment-image";
 
 const PRIORITY_MARK: Record<Task["priority"], { label: string; color: string }> = {
   high: { label: "High", color: "var(--danger)" }, medium: { label: "Medium", color: "var(--hazard)" }, low: { label: "Low", color: "var(--steel)" },
@@ -119,8 +120,9 @@ export function TaskCard({ task, tasks, certifications, users, draggable, onOpen
           {firstLink && <a href={firstLink.url} target="_blank" rel="noopener noreferrer" onPointerDown={(event) => event.stopPropagation()} className="mb-1.5 flex items-center gap-1.5 rounded-md border border-blueprint/20 bg-blueprint/8 px-2 py-1.5 text-xs font-medium text-blueprint hover:bg-blueprint/15"><ExternalLink size={12} /><span className="truncate">{firstLink.label || firstLink.url}</span></a>}
           {task.description && <p className="mb-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/85">{task.description}</p>}
           {imageAttachments.length > 0 && <div className={`mb-1.5 grid gap-1.5 ${imageAttachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>{imageAttachments.map((attachment) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={attachment.id} src={attachment.url} alt={attachment.name} className="max-h-40 w-full rounded-md border border-steel-line bg-surface object-contain" loading="lazy" />
+            <span key={attachment.id} className="block rounded-md border border-steel-line">
+              <AttachmentImage src={attachment.url} alt={attachment.name} />
+            </span>
           ))}</div>}
           {requiredCerts.length > 0 && <div className="mb-1.5 flex flex-wrap gap-1">{requiredCerts.map((certification) => <span key={certification.id} className="rounded-full border border-steel-line bg-surface px-1.5 py-0.5 text-[9px] font-bold text-steel">{certification.name}</span>)}</div>}
           {latestComment && <div className="mb-1.5 rounded-md border border-steel-line bg-surface/75 px-2 py-1.5"><p className="text-[10px] font-semibold text-steel">Latest update · {latestCommentAuthor?.displayName ?? "Former team member"}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-xs">{latestComment.body}</p></div>}

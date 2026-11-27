@@ -16,8 +16,9 @@ The Parts, Scouting, and Battery links open Team 401's separate external apps.
 
 ## Architecture
 
-- Next.js 16 static export, React 19, TypeScript, and Tailwind CSS 4
-- Cloudflare Pages for production, staging, and feature previews
+- vinext on Vite, React 19, TypeScript, and Tailwind CSS 4
+- Cloudflare Workers with prerendered static assets for production, staging, and feature previews
+- Shared Team 401 components and design tokens from `@team401/web-ui`
 - Cloudflare Worker API for authorization and data access
 - Cloudflare D1 for users, tasks, certifications, calendar, and attendance data
 - Cloudflare R2 for task attachments
@@ -60,7 +61,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | --- | --- |
 | `npm run dev` | Start the local development server |
 | `npm run lint` | Run ESLint |
-| `npm run build` | Type-check and generate the static site in `out/` |
+| `npm run build` | Build the vinext Cloudflare Worker and prerendered assets |
+| `npm run deploy:vinext` | Build and deploy the Ops frontend Worker |
 | `npm run worker:check` | Type-check the Cloudflare Worker |
 | `npm run worker:deploy` | Deploy the Cloudflare Worker API |
 | `npm run d1:migrate` | Apply pending D1 schema migrations |
@@ -73,13 +75,13 @@ Removing a roster profile immediately removes application access but does not de
 
 ## Deployment flow
 
-- Feature branches open pull requests into `staging` and receive Cloudflare preview deployments.
+- Feature branches open pull requests into `staging` and receive Cloudflare Worker preview deployments.
 - `staging` publishes to `https://staging.ops.team401.org`.
 - A manually reviewed `staging` → `main` pull request promotes the tested UI.
 - `main` publishes to `https://ops.team401.org`.
 - Production and staging intentionally share the same D1 database, R2 bucket, and Firebase Auth project.
 
-Cloudflare Pages builds with `npm run build` and publishes `out`. Configure the Firebase Auth variables above plus `NEXT_PUBLIC_OPS_API_URL` in both production and preview environments.
+The vinext build packages prerendered routes as Worker static assets and uses Cloudflare Images for responsive task-attachment previews. During the Worker cutover it also mirrors those assets to `out/`, so the existing Pages PR previews remain usable. Configure the Firebase Auth variables above plus `NEXT_PUBLIC_OPS_API_URL` for production, staging, and preview builds.
 
 `workers/api/wrangler.jsonc` defines the `team401-ops-api` Worker, shared D1 database, R2 bucket, allowed browser origins, and `api.ops.team401.org` custom domain.
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import "@team401/web-ui/styles.css";
 import "./globals.css";
 import { Providers } from "./providers";
 import { withBasePath } from "@/lib/base-path";
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       >
         <Providers>{children}</Providers>
         <Script id="team401-theme" strategy="beforeInteractive">
-          {`try{const saved=localStorage.getItem('team401-theme');const theme=saved==='light'||saved==='dark'?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme}catch{}`}
+          {`try{const saved=localStorage.getItem('team401-theme');const theme=saved==='light'||saved==='dark'?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark')}catch{}`}
         </Script>
       </body>
     </html>
