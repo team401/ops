@@ -21,6 +21,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export default function LoginPage() {
   const [resetCode, setResetCode] = useState<string | null>(null);
   const [resetEmail, setResetEmail] = useState("");
   const [checkingResetCode, setCheckingResetCode] = useState(false);
+  const [centralMode, setCentralMode] = useState(false);
 
   function destination() {
     const next = new URLSearchParams(window.location.search).get("next");
@@ -99,6 +101,20 @@ export default function LoginPage() {
       setResetMessage("If that address has an account, Firebase sent a reset link. Check spam or junk mail if it does not arrive within a few minutes.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The reset request failed. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleFirebaseSignIn(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+      router.replace(destination());
+    } catch {
+      setError("That email or password was not recognized. Check it and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -223,6 +239,39 @@ export default function LoginPage() {
   }
 
   if (!resetMode && !qrMode) {
+    if (!centralMode) {
+      return (
+        <main className="flex-1 grid-paper flex items-center justify-center px-4">
+          <form onSubmit={handleFirebaseSignIn} className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-8 space-y-5">
+            <div>
+              <p className="tracked-label text-xs text-blueprint mb-1">401 Ops</p>
+              <h1 className="text-xl font-semibold">Sign in</h1>
+              <p className="text-sm text-steel mt-1">Use your existing Ops email and password.</p>
+            </div>
+            <Field label="Email">
+              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="input" required autoComplete="email" />
+            </Field>
+            <Field label="Password">
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="input" required autoComplete="current-password" />
+            </Field>
+            {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+            <button type="submit" disabled={submitting} className="btn-primary w-full">
+              {submitting ? "Signing in…" : "Sign in"}
+            </button>
+            <button type="button" className="w-full text-sm font-medium text-blueprint hover:underline" onClick={() => { setError(null); setResetMessage(null); setResetMode(true); }}>
+              Forgot your password?
+            </button>
+            <button type="button" className="btn-secondary w-full" onClick={() => void beginQrSignIn()}>
+              Sign in with a QR code
+            </button>
+            {process.env.NEXT_PUBLIC_AUTH_SERVICE_URL && <button type="button" className="w-full text-sm font-medium text-blueprint hover:underline" onClick={() => { setError(null); setCentralMode(true); }}>
+              Test the new Team 401 sign-in
+            </button>}
+          </form>
+        </main>
+      );
+    }
+
     return (
       <main className="flex-1 grid-paper flex items-center justify-center px-4">
         <div className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-8 space-y-4">
@@ -243,6 +292,9 @@ export default function LoginPage() {
           />
           <button type="button" className="btn-secondary w-full" onClick={() => void beginQrSignIn()}>
             Sign in with a QR code
+          </button>
+          <button type="button" className="w-full text-sm font-medium text-blueprint hover:underline" onClick={() => { setError(null); setCentralMode(false); }}>
+            Use existing Ops sign-in
           </button>
         </div>
       </main>
