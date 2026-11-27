@@ -17,6 +17,7 @@
 	},
 	"vars": {
 		"FIREBASE_PROJECT_ID": "team-401",
+		"AUTH_SERVICE_URL": "https://auth.team401.org",
 		"ALLOWED_ORIGINS": "https://ops.team401.org,https://staging.ops.team401.org,http://localhost:3000",
 		"PAGES_HOST_SUFFIX": "ops-34l.pages.dev,ops-staging.pages.dev",
 		"VAPID_PUBLIC_KEY": "BMey25RDWFmA2j2ev5kmNDc_-vONSfGZYbx_9AXPp7Dk5X6hhPl8OenutpRPLVuzK5aiOKtJ-J8TlXbWbRLc_YM",

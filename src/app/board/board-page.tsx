@@ -6,6 +6,7 @@ import { KanbanBoard } from "@/components/kanban-board";
 import { useTasks, useUsers, useCertifications } from "@/lib/hooks";
 import { SUBTEAM_META } from "@/lib/subteam-meta";
 import { SUBTEAMS, type Subteam } from "@/types";
+import { Button } from "@team401/web-ui";
 
 export default function BoardPage() {
   const { tasks } = useTasks();
@@ -55,15 +56,16 @@ function FilterChip({
   color?: string;
 }) {
   return (
-    <button
+    <Button
       onClick={onClick}
-      className={`tracked-label text-[10px] px-2.5 py-1.5 rounded-sm border flex items-center gap-1.5 ${active ? "bg-blueprint text-white border-blueprint" : "bg-surface text-steel border-steel-line"
-        }`}
+      variant={active ? "primary" : "outline"}
+      size="xs"
+      className="tracked-label flex items-center gap-1.5 text-[10px]"
     >
       {color && (
         <span className="w-2 h-2 rounded-full inline-block" style={{ background: color }} />
       )}
       {label}
-    </button>
+    </Button>
   );
 }

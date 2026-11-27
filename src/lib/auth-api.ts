@@ -1,4 +1,5 @@
 import { auth } from "@/lib/firebase";
+import type { AuthorizationExchange } from "@team401/web-ui";
 
 const baseUrl = () => process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
 
@@ -46,4 +47,11 @@ export function respondToDeviceLink(id: string, token: string, approve: boolean)
     method: approve ? "PATCH" : "DELETE",
     body: JSON.stringify({ id, token }),
   }, true);
+}
+
+export function completeCentralSignIn({ code, codeVerifier, redirectUri }: AuthorizationExchange) {
+  return request<{ customToken: string }>("/auth/central-exchange", {
+    method: "POST",
+    body: JSON.stringify({ code, codeVerifier, redirectUri }),
+  });
 }

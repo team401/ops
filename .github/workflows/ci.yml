@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -23,19 +24,24 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - name: Restore Next.js build cache
+          registry-url: https://npm.pkg.github.com
+      - name: Restore Vite and vinext build caches
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx', 'next.config.*') }}
+          path: |
+            ${{ github.workspace }}/node_modules/.vite
+            ${{ github.workspace }}/.vinext
+          key: ${{ runner.os }}-vinext-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx', 'next.config.*', 'vite.config.*', 'cloudflare.config.*') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-vinext-${{ hashFiles('package-lock.json') }}-
       - run: npm ci --prefer-offline --no-audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm run lint
       - run: npm run worker:check
       - name: Bundle Cloudflare Worker
         run: npm exec -- wrangler deploy --dry-run --config workers/api/wrangler.jsonc
-      - name: Build static export
+      - name: Build vinext Worker
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}

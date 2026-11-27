@@ -9,6 +9,7 @@ import { TaskDialog } from "@/components/task-dialog";
 import type { Task } from "@/types";
 import { Search } from "lucide-react";
 import { taskMatchesSearch } from "@/lib/task-search";
+import { Input, PageHeader, SectionHeader } from "@team401/web-ui";
 
 const STATUS_LABEL: Record<string, string> = {
   backlog: "Backlog",
@@ -36,19 +37,14 @@ export default function MyTasksPage() {
 
   return (
     <AppShell>
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold">My tasks</h1>
-        <p className="text-sm text-steel">What you&apos;re working on, and what&apos;s ready for you to pick up.</p>
-      </div>
+      <PageHeader className="mb-5 rounded-lg" title="My tasks" description="What you're working on, and what's ready for you to pick up." showBrand />
       <label className="relative mb-4 block max-w-sm">
         <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-steel" />
-        <input type="search" className="input input-with-icon" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search my tasks…" aria-label="Search my tasks" />
+        <Input type="search" className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search my tasks…" aria-label="Search my tasks" />
       </label>
 
       <section className="mb-8">
-        <h2 className="tracked-label text-xs text-steel mb-2">
-          Claimed by me ({myTasks.length})
-        </h2>
+        <SectionHeader title={`Claimed by me (${myTasks.length})`} />
         {myTasks.length === 0 ? (
           <p className="text-sm text-steel">
             {search ? "No assigned tasks match your search." : "Nothing claimed yet."}
