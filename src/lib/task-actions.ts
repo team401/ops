@@ -1,4 +1,4 @@
-import { auth } from "@/lib/firebase";
+import { opsApiUrl } from "@/lib/api-request";
 import type { Task, TaskStatus, TaskHistoryEntry, TaskComment, TaskAttachment } from "@/types";
 import { appendD1TaskAttachment, appendD1TaskComment, createD1Task, deleteD1Task, fetchTasks, patchD1Task } from "@/lib/core-api";
 
@@ -47,16 +47,13 @@ export async function addTaskComment(taskId: string, body: string, authorUid: st
 export async function uploadTaskAttachment(taskId: string, file: File, uploadedByUid: string) {
   const id = crypto.randomUUID();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const attachmentApiUrl = process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
-  if (!attachmentApiUrl) throw new Error("The R2 attachment service is unavailable.");
-  const token = await auth.currentUser?.getIdToken();
-  if (!token) throw new Error("Sign in again before uploading an attachment.");
+  const attachmentApiUrl = opsApiUrl();
   const response = await fetch(
     `${attachmentApiUrl}/attachments/${encodeURIComponent(taskId)}/${encodeURIComponent(id)}/${encodeURIComponent(safeName)}`,
     {
       method: "PUT",
+      credentials: "include",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": file.type || "application/octet-stream",
       },
       body: file,
@@ -102,13 +99,11 @@ async function deleteAttachmentObject(taskId: string, attachment: TaskAttachment
 }
 
 async function deleteR2Attachment(taskId: string, attachment: TaskAttachment) {
-  const attachmentApiUrl = process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
-  const token = await auth.currentUser?.getIdToken();
-  if (!attachmentApiUrl || !token) throw new Error("R2 attachment service is unavailable.");
+  const attachmentApiUrl = opsApiUrl();
   const safeName = attachment.storagePath.split("/").at(-1) ?? attachment.name;
   const response = await fetch(
     `${attachmentApiUrl}/attachments/${encodeURIComponent(taskId)}/${encodeURIComponent(attachment.id)}/${encodeURIComponent(safeName)}`,
-    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    { method: "DELETE", credentials: "include" },
   );
   if (!response.ok && response.status !== 404) throw new Error("The R2 attachment could not be deleted.");
 }

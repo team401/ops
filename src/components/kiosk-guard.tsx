@@ -14,7 +14,7 @@ function isTimeclockPath(pathname: string) {
 }
 
 export function KioskGuard({ children }: { children: ReactNode }) {
-  const { firebaseUser, profile, loading } = useAuth();
+  const { authUser, profile, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [checked, setChecked] = useState(false);
@@ -35,7 +35,7 @@ export function KioskGuard({ children }: { children: ReactNode }) {
 
     // A kiosk lock must never survive a coach sign-out or become attached to
     // a non-coach session that later uses the same browser tab.
-    if (!firebaseUser || profile?.role !== "coach") {
+    if (!authUser || profile?.role !== "coach") {
       clearKioskSession();
       return;
     }
@@ -43,7 +43,7 @@ export function KioskGuard({ children }: { children: ReactNode }) {
     if (!isTimeclockPath(pathname)) {
       router.replace("/timeclock", { scroll: false });
     }
-  }, [checked, firebaseUser, kioskActive, loading, pathname, profile, router]);
+  }, [checked, authUser, kioskActive, loading, pathname, profile, router]);
 
   // Check sessionStorage before showing any route. Once locked, hide every
   // route reached through Back/Forward while its URL is replaced with the

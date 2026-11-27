@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { firebaseUser, loading } = useAuth();
+  const { authUser, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !firebaseUser) {
+    if (!loading && !authUser) {
       router.replace("/login");
     }
-  }, [loading, firebaseUser, router]);
+  }, [loading, authUser, router]);
 
   if (loading) {
     return (
@@ -22,7 +22,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!firebaseUser) return null;
+  if (!authUser) return null;
 
   return <>{children}</>;
 }

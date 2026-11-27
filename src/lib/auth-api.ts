@@ -1,25 +1,10 @@
-import { auth } from "@/lib/firebase";
 import type { AuthorizationExchange } from "@team401/web-ui";
+import { apiRequest } from "@/lib/api-request";
 
-const baseUrl = () => process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
-
-async function request<T>(path: string, init?: RequestInit, authenticated = false): Promise<T> {
-  const url = baseUrl();
-  if (!url) throw new Error("The Ops authentication service is unavailable.");
-  const token = authenticated ? await auth.currentUser?.getIdToken() : null;
-  if (authenticated && !token) throw new Error("Sign in before approving another device.");
-  const response = await fetch(`${url}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-  });
-  const body = await response.json().catch(() => null) as (T & { error?: string }) | null;
-  if (!response.ok) throw new Error(body?.error ?? "The authentication request failed.");
-  return body as T;
+export interface AuthUser {
+  uid: string;
+  email: string;
+  displayName: string;
 }
 
 export interface DeviceLinkStart {
@@ -29,29 +14,49 @@ export interface DeviceLinkStart {
   expiresAt: number;
 }
 
+type SessionIdentity = { memberId: string; email: string; displayName: string };
+
+function user(identity: SessionIdentity): AuthUser {
+  return { uid: identity.memberId, email: identity.email, displayName: identity.displayName };
+}
+
+export async function fetchAuthSession() {
+  try {
+    const result = await apiRequest<{ user: SessionIdentity }>("/auth/session", { cache: "no-store" });
+    return user(result.user);
+  } catch {
+    return null;
+  }
+}
+
+export async function completeCentralSignIn({ code, codeVerifier, redirectUri }: AuthorizationExchange) {
+  const result = await apiRequest<{ user: SessionIdentity }>("/auth/session", {
+    method: "POST",
+    body: JSON.stringify({ code, codeVerifier, redirectUri }),
+  }, "Central sign-in could not be completed.");
+  return user(result.user);
+}
+
+export function signOutSession() {
+  return apiRequest<{ signedOut: true }>("/auth/session", { method: "DELETE" });
+}
+
 export function requestPasswordReset(email: string) {
-  return request<{ sent: true }>("/auth/password-reset", { method: "POST", body: JSON.stringify({ email }) });
+  return apiRequest<{ requested: true }>("/auth/session/password-reset", { method: "POST", body: JSON.stringify({ email }) });
 }
 
 export function beginDeviceLink() {
-  return request<DeviceLinkStart>("/auth/device-link", { method: "POST" });
+  return apiRequest<DeviceLinkStart>("/auth/session/device-link", { method: "POST" });
 }
 
 export function pollDeviceLink(id: string, token: string) {
   const query = new URLSearchParams({ id, token });
-  return request<{ status: "pending" } | { status: "approved"; customToken: string }>(`/auth/device-link?${query}`);
+  return apiRequest<{ status: "pending" | "authenticated" }>(`/auth/session/device-link?${query}`, { cache: "no-store" });
 }
 
 export function respondToDeviceLink(id: string, token: string, approve: boolean) {
-  return request<{ status: "approved" | "denied" }>("/auth/device-link", {
+  return apiRequest<{ approved?: true; denied?: true; email?: string }>("/auth/session/device-link", {
     method: approve ? "PATCH" : "DELETE",
     body: JSON.stringify({ id, token }),
-  }, true);
-}
-
-export function completeCentralSignIn({ code, codeVerifier, redirectUri }: AuthorizationExchange) {
-  return request<{ customToken: string }>("/auth/central-exchange", {
-    method: "POST",
-    body: JSON.stringify({ code, codeVerifier, redirectUri }),
   });
 }

@@ -1,23 +1,7 @@
-import { auth } from "@/lib/firebase";
+import { apiRequest } from "@/lib/api-request";
 import type { Certification } from "@/types";
 
-function apiUrl() {
-  return process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const baseUrl = apiUrl();
-  const token = await auth.currentUser?.getIdToken();
-  if (!baseUrl || !token) throw new Error("The Ops data service is unavailable.");
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init?.headers },
-  });
-  if (response.status === 204) return undefined as T;
-  const body = await response.json() as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "The Ops data request failed.");
-  return body;
-}
+const request = apiRequest;
 
 export function fetchCertifications() {
   return request<Certification[]>("/certifications");

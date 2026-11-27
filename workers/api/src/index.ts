@@ -3,10 +3,11 @@
 import { handleOperations, isOperationsRoute } from "./operations";
 import { handleCore, isCoreRoute } from "./core";
 import { handleNotifications, isNotificationRoute, sendDailyEmailDigests } from "./notifications";
-import { handleAuth, isAuthRoute, type AuthEnv } from "./auth";
+import { authenticatedUid, handleAuth, isAuthRoute, type AuthEnv } from "./auth";
+import { handleAuth as handleLegacyAuth, isAuthRoute as isLegacyAuthRoute, type AuthEnv as LegacyAuthEnv } from "./legacy-auth";
 import { verifyFirebaseToken } from "./firebase-auth";
 
-interface Env extends AuthEnv {
+interface Env extends AuthEnv, LegacyAuthEnv {
   ATTACHMENTS: R2Bucket;
   DB: D1Database;
   FIREBASE_PROJECT_ID: string;
@@ -42,11 +43,11 @@ export default {
     if (isAuthRoute(url.pathname)) {
       return handleAuth(request, env, cors);
     }
+    if (isLegacyAuthRoute(url.pathname)) return handleLegacyAuth(request, env, cors);
 
     if (isCoreRoute(url.pathname)) {
       try {
-        const token = bearerToken(request);
-        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        const uid = await requestUid(request, env);
         return handleCore(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Data request failed");
@@ -55,8 +56,7 @@ export default {
 
     if (isOperationsRoute(url.pathname)) {
       try {
-        const token = bearerToken(request);
-        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        const uid = await requestUid(request, env);
         return handleOperations(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Data request failed");
@@ -65,8 +65,7 @@ export default {
 
     if (isNotificationRoute(url.pathname)) {
       try {
-        const token = bearerToken(request);
-        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        const uid = await requestUid(request, env);
         return handleNotifications(request, env, uid, cors);
       } catch (error) {
         return authenticatedError(error, cors, "Notification request failed");
@@ -76,8 +75,7 @@ export default {
     const certificationMatch = url.pathname.match(certificationRoute);
     if (certificationMatch) {
       try {
-        const token = bearerToken(request);
-        const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+        const uid = await requestUid(request, env);
         if (request.method === "GET" && !certificationMatch[1]) {
           if (!await fetchD1Profile(env.DB, uid)) throw new Error("Forbidden");
           const result = await env.DB.prepare("SELECT id, name, description, subteam FROM certifications ORDER BY name COLLATE NOCASE").all<CertificationRow>();
@@ -132,8 +130,7 @@ export default {
     }
 
     try {
-      const token = bearerToken(request);
-      const uid = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
+      const uid = await requestUid(request, env);
       const [task, profile] = await Promise.all([fetchD1Task(env.DB, taskId), fetchD1Profile(env.DB, uid)]);
       const authorized = Boolean(task && profile && canChangeAttachments(uid, task, profile));
       if (!authorized) {
@@ -184,10 +181,14 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-function bearerToken(request: Request) {
+async function requestUid(request: Request, env: Env) {
   const authorization = request.headers.get("Authorization");
-  if (!authorization?.startsWith("Bearer ")) throw new Error("Unauthorized");
-  return authorization.slice("Bearer ".length);
+  if (!authorization?.startsWith("Bearer ")) return authenticatedUid(request, env);
+  try {
+    return await verifyFirebaseToken(authorization.slice(7), env.FIREBASE_PROJECT_ID);
+  } catch {
+    throw new Error("Unauthorized");
+  }
 }
 
 interface CertificationRow {
@@ -251,6 +252,7 @@ function corsHeaders(origin: string | null, env: Env) {
   const headers = new Headers({
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET, PUT, POST, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   });

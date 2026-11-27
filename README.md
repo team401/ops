@@ -22,9 +22,9 @@ The Parts, Scouting, and Battery links open Team 401's separate external apps.
 - Cloudflare Worker API for authorization and data access
 - Cloudflare D1 for users, tasks, certifications, calendar, and attendance data
 - Cloudflare R2 for task attachments
-- Firebase Authentication for email/password identity only
+- Team 401 Auth for identity and D1-backed Ops sessions
 
-The Worker verifies Firebase ID tokens, then authorizes requests using the user's D1 profile. Firestore and Firebase Storage are not runtime dependencies.
+The current frontend uses an Ops session cookie. The API retains Firebase token verification for older deployed frontends during rollout.
 
 ## Local setup
 
@@ -37,15 +37,10 @@ npm install
 Create `.env.local`:
 
 ```env
-NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=team-401.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=team-401
-NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 NEXT_PUBLIC_OPS_API_URL=https://api.ops.team401.org
-NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-staging.team401.org
 ```
 
-Firebase web configuration identifies the Auth application and is intentionally available to the browser. Application authorization is enforced by the Worker API.
+Application authorization is enforced by the Worker API.
 
 Start the development server:
 
@@ -69,9 +64,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Accounts
 
-There is no public registration page. Firebase Authentication stores account credentials, while the matching profile and permissions live in D1. Coaches create additional accounts from **Admin → Roster**; each new account receives a temporary password and a timeclock PIN.
-
-Removing a roster profile immediately removes application access but does not delete the corresponding Firebase Authentication identity. Delete the Auth user from the Firebase console when the login itself must be permanently removed.
+Team 401 Auth owns account credentials. Ops authorizes requests against the existing D1 profile linked by the central account's Ops user ID. New accounts need that mapping and a corresponding Ops profile before they can sign in. The Ops roster manages existing profiles, certifications, and timeclock PINs.
 
 ## Deployment flow
 
@@ -79,26 +72,16 @@ Removing a roster profile immediately removes application access but does not de
 - `staging` publishes to `https://staging.ops.team401.org`.
 - A manually reviewed `staging` → `main` pull request promotes the tested UI.
 - `main` publishes to `https://ops.team401.org`.
-- Production and staging intentionally share the same D1 database, R2 bucket, and Firebase Auth project.
+- Production and staging share the Ops D1 database and R2 bucket. Central sign-in uses the corresponding Team 401 Auth environment.
 
-The vinext build packages prerendered routes as Worker static assets and uses Cloudflare Images for responsive task-attachment previews. During the Worker cutover it also mirrors those assets to `out/`, so the existing Pages PR previews remain usable. Configure the Firebase Auth variables above plus `NEXT_PUBLIC_OPS_API_URL` for production, staging, and preview builds.
+The vinext build mirrors static assets to `out/` for Pages previews. Configure `NEXT_PUBLIC_OPS_API_URL` for production and staging. Test authenticated flows on the stable custom domains, where the browser can send the session cookie to the same-site API.
 
 `workers/api/wrangler.jsonc` defines the `team401-ops-api` Worker, shared D1 database, R2 bucket, allowed browser origins, and `api.ops.team401.org` custom domain.
 
-Password reset and QR device sign-in use the same Firebase project as normal login. The Worker requires these secrets:
-
-```text
-FIREBASE_WEB_API_KEY
-FIREBASE_SERVICE_ACCOUNT_EMAIL
-FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY
-AUTH_CLIENT_SECRET
-AUTH_STAGING_CLIENT_SECRET
-```
-
-The web API key is the same public Firebase key used by `NEXT_PUBLIC_FIREBASE_API_KEY`. The service-account email and PKCS#8 private key come from a Firebase Admin service-account JSON key and must only be stored as Cloudflare Worker secrets. Apply D1 migrations before deploying the Worker. In Firebase Authentication → Templates → Password reset, set the custom action URL to `https://ops.team401.org/login` so reset links finish inside Ops.
+Apply migration `0009_team401_auth.sql` and deploy the API before publishing the frontend. The API rollout supports existing clients while new clients start using central sign-in, QR device links, and central password reset. Retain existing Firebase API configuration until the old clients are retired.
 
 Renovate targets `staging`. Routine non-major updates may auto-merge only after validation succeeds. Promotion to `main` remains manual.
 
 ## Kiosk security
 
-Only coaches can launch kiosk mode. Kiosk PINs identify team members for attendance and are not Firebase passwords. A global guard prevents navigation away from the locked timeclock; exiting requires the signed-in coach's password or safe sign-out.
+Only coaches can launch kiosk mode. Kiosk PINs identify team members for attendance. A global guard prevents navigation away from the locked timeclock. Exiting signs the coach out and returns the browser to sign-in.
