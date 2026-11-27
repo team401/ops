@@ -1,4 +1,6 @@
-const baseUrl = () => process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
+const baseUrl = () => typeof window !== "undefined" && window.location.hostname.endsWith(".pages.dev")
+  ? "/api"
+  : process.env.NEXT_PUBLIC_OPS_API_URL?.replace(/\/$/, "");
 
 export async function apiRequest<T>(path: string, init?: RequestInit, fallback = "The Ops data request failed."): Promise<T> {
   const base = baseUrl();
