@@ -19,6 +19,11 @@ export default function LoginPage() {
   const [qrBusy, setQrBusy] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const [deviceLink, setDeviceLink] = useState<(DeviceLinkStart & { image: string }) | null>(null);
+  const [previewOrigin, setPreviewOrigin] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => setPreviewOrigin(window.location.hostname.endsWith(".pages.dev")));
+  }, []);
 
   function destination() {
     const next = new URLSearchParams(window.location.search).get("next");
@@ -84,6 +89,16 @@ export default function LoginPage() {
     timer = window.setTimeout(poll, 1000);
     return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [deviceLink, refreshSession, router]);
+
+  if (previewOrigin) {
+    return <main className="flex-1 flex items-center justify-center px-4">
+      <div className="bg-paper-raised border border-steel-line rounded w-full max-w-sm p-8 space-y-4">
+        <h1 className="text-xl font-semibold">Sign in on staging</h1>
+        <p className="text-sm text-steel">This preview needs same-origin API routing before it can support sign-in. Use the staging site to test authenticated features.</p>
+        <a href="https://staging.ops.team401.org/login" className="btn-primary block text-center">Open staging</a>
+      </div>
+    </main>;
+  }
 
   if (!resetMode && !qrMode) {
     return <main className="flex-1 grid-paper flex items-center justify-center px-4">
